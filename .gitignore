@@ -1,0 +1,11 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.venv/
+.mplconfig/
+.pytest_cache/
+figures/
+tables/
+build/
+dist/
+*.egg-info/

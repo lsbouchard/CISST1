@@ -1,0 +1,5 @@
+constant,value,unit
+hbar,1.054571817e-34,J s
+kB,1.380649e-23,J K^-1
+abs_gamma_e,176085963023.0,s^-1 T^-1
+N_turn,10.5,dimensionless
