@@ -80,17 +80,26 @@ class AnalyticProfile:
         ) / self.length
 
 
-def solve_profile(length_over_ell, tau, peclet=0.0, absorbing=False):
-    """Solve u''-Pe*u'-(u-1)=0 with symmetric outward-flux contacts.
+def solve_profile(
+    length_over_ell,
+    tau_left,
+    tau_right=None,
+    peclet=0.0,
+    absorbing=False,
+):
+    """Solve u''-Pe*u'-(u-1)=0 with outward-flux contacts.
 
-    The dimensionless transparency is tau=kappa*ell_s/D_s. Setting
-    absorbing=True imposes u=0 at both contacts, the tau -> infinity limit.
+    The dimensionless transparencies are tau=kappa*ell_s/D_s. If tau_right
+    is omitted, symmetric contacts are used. Setting absorbing=True imposes
+    u=0 at both contacts, the two-sided infinite-transparency limit.
     """
 
     if length_over_ell <= 0:
         raise ValueError("length_over_ell must be positive")
-    if not absorbing and tau < 0:
-        raise ValueError("tau must be nonnegative")
+    if tau_right is None:
+        tau_right = tau_left
+    if not absorbing and (tau_left < 0 or tau_right < 0):
+        raise ValueError("contact transparencies must be nonnegative")
 
     discriminant = np.sqrt(peclet**2 + 4.0)
     r_plus = 0.5 * (peclet + discriminant)
@@ -111,16 +120,16 @@ def solve_profile(length_over_ell, tau, peclet=0.0, absorbing=False):
         matrix = np.array(
             [
                 [
-                    r_plus - peclet - tau,
-                    r_minus - peclet - tau,
+                    r_plus - peclet - tau_left,
+                    r_minus - peclet - tau_left,
                 ],
                 [
-                    exp_plus * (r_plus - peclet + tau),
-                    exp_minus * (r_minus - peclet + tau),
+                    exp_plus * (r_plus - peclet + tau_right),
+                    exp_minus * (r_minus - peclet + tau_right),
                 ],
             ]
         )
-        rhs = np.array([peclet + tau, peclet - tau])
+        rhs = np.array([peclet + tau_left, peclet - tau_right])
 
     coefficient_plus, coefficient_minus = np.linalg.solve(matrix, rhs)
     return AnalyticProfile(
@@ -145,8 +154,8 @@ def contact_observables(profile):
     return profile.average(), u_left, u_right, left_flux, right_flux
 
 
-def residuals(profile, tau, absorbing):
-    """Return maximum ODE and boundary residuals for an analytic profile."""
+def residuals(profile, tau_left, tau_right, absorbing):
+    """Return ODE, boundary, and integrated-balance residuals."""
 
     x = np.linspace(0.0, profile.length, 17)
     u = profile.value(x)
@@ -162,15 +171,24 @@ def residuals(profile, tau, absorbing):
         boundary_residuals = np.array(
             [
                 profile.derivative(0.0)
-                - (profile.peclet + tau) * profile.value(0.0),
+                - (profile.peclet + tau_left) * profile.value(0.0),
                 profile.derivative(profile.length)
-                - (profile.peclet - tau)
+                - (profile.peclet - tau_right)
                 * profile.value(profile.length),
             ]
         )
+    average, _u_left, _u_right, left_flux, right_flux = contact_observables(
+        profile
+    )
+    balance_residual = (
+        left_flux
+        + right_flux
+        - profile.length * (1.0 - average)
+    )
     return (
         float(np.max(np.abs(ode_residual))),
         float(np.max(np.abs(boundary_residuals))),
+        float(abs(balance_residual)),
     )
 
 
@@ -190,10 +208,12 @@ def main():
     for case_key, tau, absorbing, label in cases:
         case_ode_residual = 0.0
         case_boundary_residual = 0.0
+        case_balance_residual = 0.0
         for length in lengths:
             tau_solve = 0.0 if absorbing else tau
             profile = solve_profile(
                 length,
+                tau_solve,
                 tau_solve,
                 peclet=peclet,
                 absorbing=absorbing,
@@ -201,8 +221,9 @@ def main():
             average, u_left, u_right, left_flux, right_flux = (
                 contact_observables(profile)
             )
-            ode_residual, boundary_residual = residuals(
+            ode_residual, boundary_residual, balance_residual = residuals(
                 profile,
+                tau_solve,
                 tau_solve,
                 absorbing,
             )
@@ -210,6 +231,10 @@ def main():
             case_boundary_residual = max(
                 case_boundary_residual,
                 boundary_residual,
+            )
+            case_balance_residual = max(
+                case_balance_residual,
+                balance_residual,
             )
             rows.append(
                 {
@@ -230,8 +255,44 @@ def main():
         validation_rows.append(
             {
                 "case": case_key,
+                "length_over_ell": "range_0.05_to_8",
+                "tau_left": "inf" if absorbing else tau,
+                "tau_right": "inf" if absorbing else tau,
+                "peclet": peclet,
                 "max_abs_ode_residual": case_ode_residual,
                 "max_abs_boundary_residual": case_boundary_residual,
+                "max_abs_balance_residual": case_balance_residual,
+            }
+        )
+
+    stress_cases = [
+        ("asymmetric_positive_drift", 0.7, 0.2, 3.0, 1.5),
+        ("asymmetric_negative_drift", 2.3, 4.0, 0.1, -1.2),
+        ("reflecting_with_drift", 3.1, 0.0, 0.0, 2.0),
+    ]
+    for case_key, length, tau_left, tau_right, stress_peclet in stress_cases:
+        profile = solve_profile(
+            length,
+            tau_left,
+            tau_right,
+            peclet=stress_peclet,
+        )
+        ode_residual, boundary_residual, balance_residual = residuals(
+            profile,
+            tau_left,
+            tau_right,
+            False,
+        )
+        validation_rows.append(
+            {
+                "case": case_key,
+                "length_over_ell": length,
+                "tau_left": tau_left,
+                "tau_right": tau_right,
+                "peclet": stress_peclet,
+                "max_abs_ode_residual": ode_residual,
+                "max_abs_boundary_residual": boundary_residual,
+                "max_abs_balance_residual": balance_residual,
             }
         )
 
@@ -240,6 +301,8 @@ def main():
             raise RuntimeError(f"ODE validation failed: {validation}")
         if validation["max_abs_boundary_residual"] > 1e-10:
             raise RuntimeError(f"boundary validation failed: {validation}")
+        if validation["max_abs_balance_residual"] > 1e-10:
+            raise RuntimeError(f"balance validation failed: {validation}")
 
     output_csv = DATA / "contact_transparency.csv"
     with output_csv.open("w", newline="", encoding="utf-8") as handle:
@@ -274,7 +337,7 @@ def main():
         }
     )
 
-    fig, axes = plt.subplots(1, 2, figsize=(7.0, 2.55))
+    fig, axes = plt.subplots(1, 2, figsize=(7.0, 2.45), sharex=True)
     colors = {
         "absorbing": "#1f77b4",
         "partial": "#d62728",
@@ -308,8 +371,8 @@ def main():
             label=label,
         )
 
-    axes[0].set_xlabel(r"layer thickness $L/\ell_s$")
     axes[0].set_ylabel(r"mean density $\langle s\rangle/s_*$")
+    axes[0].set_xlabel(r"layer thickness $L/\ell_s$")
     axes[0].set_xlim(0, 8)
     axes[0].set_ylim(0, 1.05)
     axes[0].grid(True, linewidth=0.3)

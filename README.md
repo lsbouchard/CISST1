@@ -10,7 +10,8 @@ Overleaf archive is distributed separately and contains only its self-contained
 - `scripts/generate_figures.py`: model schematic, Barnett estimates,
   relaxation response, length scaling, diffusion map, CSV files, and table
 - `scripts/solve_contact_transparency.py`: analytic finite-contact calculation
-- `scripts/validate_outputs.py`: independent checks of every generated number
+- `scripts/validate_outputs.py`: independent checks of generated numbers,
+  table rows, and the complete figure set
 - `data/`: generated source data and analytic validation residuals
 - `requirements.txt`: pinned Python dependencies
 - `CHANGELOG.md`: manuscript and calculation changes
@@ -29,9 +30,11 @@ python3 -m venv .venv
 
 The first two scripts regenerate `figures/*.pdf`, `data/*.csv`, and
 `tables/barnett_table.tex`. The validator checks the requested physical
-constants, every Barnett value, the one-mode response, finite-length laws,
-the diffusion grid, Robin boundary conditions, differential-equation
-residuals, and integrated angular-momentum balance.
+constants, every displayed Barnett-table value, the one-mode response,
+finite-length laws, the diffusion grid, Robin boundary conditions,
+differential-equation residuals, integrated angular-momentum balance, and the
+presence and nonzero size of all six figure PDFs. A successful run ends with
+`Validated constants, table, figures, and all generated numerical data.`
 
 ## Scientific Scope
 

@@ -127,20 +127,20 @@ def generate_model_schematic():
     ax.text(
         0.355,
         0.15,
-        r"$\vec{\Omega}_{\chi}=\eta_{\chi}\chi_{\rm mol}j_c\hat{\mathbf{h}}$",
+        r"$\delta\mathcal{J}^{\rm ang}_h=C_{{\rm ang},j}j_c$",
         ha="center",
         fontsize=7,
     )
     ax.text(
         0.595,
         0.15,
-        r"$\mathbf{s}_{\chi}=\mathcal{A}\vec{\Omega}_{\chi}$",
+        r"$s_{\chi,h}=\mathcal{A}_{hh}\Omega_{\chi,h}$",
         ha="center",
     )
     ax.text(
         0.86,
         0.15,
-        r"$G^{-1}=1+D_sq^2T_1+iqv_dT_1-i\omega T_1$",
+        r"$1+D_sq^2T_1+iqv_dT_1-i\omega T_1$",
         ha="center",
         fontsize=6.5,
     )
@@ -341,7 +341,7 @@ def generate_length_scaling():
         linestyle=":",
         label=r"outward flux: $\tanh(L/\ell_s)$",
     )
-    ax.set_xlabel(r"normalized length $L/\ell$")
+    ax.set_xlabel(r"dimensionless thickness ($L/\ell_d$ or $L/\ell_s$)")
     ax.set_ylabel(r"normalized response")
     ax.set_xlim(0, 6)
     ax.set_ylim(0, 1.05)
@@ -377,6 +377,7 @@ def generate_diffusion_landscape():
         cmap="viridis",
         edgecolors="face",
         antialiased=False,
+        rasterized=True,
         snap=True,
     )
     ax.set_xscale("log")

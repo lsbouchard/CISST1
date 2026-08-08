@@ -2,8 +2,13 @@
 
 ## Angular-momentum distinction release - 2026-08-07
 
-- Shortened the title to “Relaxation-Limited Chiral Barnett Response: An
-  Open-System Theory of CISS.”
+- Shortened the title to `Relaxation-Limited Chiral Barnett Response`.
+- Made the physical current-induced electronic-angular-momentum density the
+  primary response and retained the Barnett frequency only as an optional
+  response coordinate.
+- Stated the local-quasiequilibrium condition required to infer spin from that
+  auxiliary coordinate; otherwise a direct current-to-spin coefficient is
+  required.
 - Added Hahn, Tenn, and Augustine's zero-field Barnett analysis and used it to
   state the rotor-coupling-reaction-torque criterion for any physical Barnett
   interpretation.
@@ -12,6 +17,13 @@
 - Added a typed three-sector angular-momentum balance in which spin-orbit and
   bath-transfer torques cancel internally and the circuit supplies the net
   source.
+- Derived the vector Markov closure by explicit block-generator adiabatic
+  elimination, including all block dimensions, its Schur complement, its
+  stability condition, and the leading memory correction.
+- Proved that target-density and volumetric-rate drives are non-identifiable at
+  fixed `T1`, because only their combined source enters the bulk equation.
+- Added finite-device mode poles and an explicitly normalized Green-Kubo
+  derivation of the charge-spin Onsager-Casimir relation.
 - Added a prepared-order initial-condition protocol, while stating that coherent
   oscillations require a resolved coupled model and are not a universal CISS
   prediction or a one-$T_1$ response.
@@ -25,13 +37,27 @@
   momentum into spin. The rank-two projector now only represents distinct
   operators in one low-energy subspace; spin response is carried by an explicit
   physical-spin--electronic-angular-momentum cross-susceptibility.
+- Replaced the informal full-space/projected-matrix identification by an
+  isometry, an explicit rank-2 projector on the microscopic Hilbert space, and
+  a typed `2 x 2` compression map; added a basis-invariance check for every
+  physical response tensor.
+- Exhibited the exact affine reparameterization freedom between target-density
+  and torque-rate sources and derived dissipative stability directly from the
+  positive-definite symmetric part of the `3 x 3` relaxation generator.
 - Stated throughout that the trajectory-based Barnett identification is a
   hypothetical diagnostic introduced in this manuscript, not an earlier theory
   or publication by the authors.
 - Clarified the full rotation generator, eliminated the last unqualified
   angular-velocity symbols, and split the Coriolis identity to fit one column.
-- Regenerated and validated all numerical outputs, recompiled the self-contained
-  REVTeX4-2 source, and manually inspected all six figures and all 13 PDF pages.
+- Generalized the contact solver to independent left and right transparencies
+  and both drift directions, and added differential, boundary, and integrated
+  conservation residuals.
+- Restricted the physical interpretation of total-flux Robin boundaries at
+  finite drift, while retaining and validating the general analytic boundary
+  problem; redesigned the displayed drift-free contact comparison for clear
+  two-column rendering.
+- Regenerated and validated all numerical outputs, rebuilt the self-contained
+  REVTeX4-2 source, and inspected every final figure and PDF page.
 - Rebuilt a minimal Overleaf archive containing only `main.tex` and figure PDFs;
   scripts, CSV data, validation code, and this change log are in the separate
   code archive.

@@ -1,4 +1,7 @@
-case,max_abs_ode_residual,max_abs_boundary_residual
-absorbing,2.220446049250313e-16,2.220446049250313e-16
-partial,1.1102230246251565e-16,5.551115123125783e-17
-reflecting,0.0,0.0
+case,length_over_ell,tau_left,tau_right,peclet,max_abs_ode_residual,max_abs_boundary_residual,max_abs_balance_residual
+absorbing,range_0.05_to_8,inf,inf,0.0,2.220446049250313e-16,2.220446049250313e-16,1.1102230246251565e-15
+partial,range_0.05_to_8,1.0,1.0,0.0,1.1102230246251565e-16,5.551115123125783e-17,9.992007221626409e-16
+reflecting,range_0.05_to_8,0.0,0.0,0.0,0.0,0.0,0.0
+asymmetric_positive_drift,0.7,0.2,3.0,1.5,1.1102230246251565e-16,3.3306690738754696e-16,0.0
+asymmetric_negative_drift,2.3,4.0,0.1,-1.2,2.220446049250313e-16,4.440892098500626e-16,2.220446049250313e-16
+reflecting_with_drift,3.1,0.0,0.0,2.0,8.881784197001252e-16,1.7763568394002505e-15,3.4861002973229914e-15

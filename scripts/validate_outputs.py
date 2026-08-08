@@ -8,6 +8,8 @@ import math
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data"
+TABLES = ROOT / "tables"
+FIGURES = ROOT / "figures"
 
 HBAR = 1.054571817e-34
 KB = 1.380649e-23
@@ -86,6 +88,37 @@ def validate_barnett():
         )
 
 
+def parse_tex_number(cell):
+    """Parse the restricted scientific-number syntax used in the table."""
+
+    token = cell.strip().strip("$")
+    marker = r"\times10^{"
+    if marker not in token:
+        return float(token)
+    mantissa, exponent = token.split(marker, maxsplit=1)
+    return float(mantissa) * 10.0 ** int(exponent.rstrip("}"))
+
+
+def validate_barnett_table():
+    table_path = TABLES / "barnett_table.tex"
+    rows = []
+    for line in table_path.read_text(encoding="utf-8").splitlines():
+        if "&" not in line or r"R_{\rm hop}" in line:
+            continue
+        cells = line.removesuffix(r"\\").split("&")
+        rows.append([parse_tex_number(cell) for cell in cells])
+    if len(rows) != 6 or any(len(row) != 4 for row in rows):
+        raise AssertionError("Barnett table must contain six four-column data rows")
+
+    for index, (rate, omega_shown, field_shown, percent_shown) in enumerate(rows):
+        omega = 2.0 * math.pi * rate / N_TURN
+        field = omega / GAMMA_E_ABS
+        percent = 100.0 * math.tanh(HBAR * omega / (2.0 * KB * 300.0))
+        assert_close(omega_shown, omega, f"table Omega[{index}]", rtol=6e-3)
+        assert_close(field_shown, field, f"table B_B[{index}]", rtol=6e-3)
+        assert_close(percent_shown, percent, f"table P_B[{index}]", rtol=6e-3)
+
+
 def validate_relaxation():
     rows = read_rows("relaxation_response.csv")
     if len(rows) != 800:
@@ -141,17 +174,23 @@ def validate_diffusion_map():
 
 def validate_contacts():
     validation = read_rows("contact_validation.csv")
-    if {row["case"] for row in validation} != {
+    expected_validation_cases = {
         "absorbing",
         "partial",
         "reflecting",
-    }:
+        "asymmetric_positive_drift",
+        "asymmetric_negative_drift",
+        "reflecting_with_drift",
+    }
+    if {row["case"] for row in validation} != expected_validation_cases:
         raise AssertionError("contact validation cases are incomplete")
     for row in validation:
         if as_float(row, "max_abs_ode_residual") > 1e-10:
             raise AssertionError(f"ODE residual failed: {row}")
         if as_float(row, "max_abs_boundary_residual") > 1e-10:
             raise AssertionError(f"boundary residual failed: {row}")
+        if as_float(row, "max_abs_balance_residual") > 1e-10:
+            raise AssertionError(f"balance residual failed: {row}")
 
     rows = read_rows("contact_transparency.csv")
     if len(rows) != 3 * 220:
@@ -164,16 +203,17 @@ def validate_contacts():
         total_flux = as_float(row, "total_outward_flux_norm")
         assert_close(total_flux, left_flux + right_flux, f"flux sum[{index}]")
         assert_close(total_flux, length * (1.0 - average), f"balance[{index}]")
-        if row["case"] == "partial":
-            tau = as_float(row, "tau_left")
+        if row["case"] in {"partial", "reflecting"}:
+            tau_left = as_float(row, "tau_left")
+            tau_right = as_float(row, "tau_right")
             assert_close(
                 left_flux,
-                tau * as_float(row, "left_boundary_s_over_s_star"),
+                tau_left * as_float(row, "left_boundary_s_over_s_star"),
                 f"left Robin[{index}]",
             )
             assert_close(
                 right_flux,
-                tau * as_float(row, "right_boundary_s_over_s_star"),
+                tau_right * as_float(row, "right_boundary_s_over_s_star"),
                 f"right Robin[{index}]",
             )
         elif row["case"] == "absorbing":
@@ -187,19 +227,37 @@ def validate_contacts():
                 0.0,
                 f"right absorbing[{index}]",
             )
-        elif row["case"] == "reflecting":
-            assert_close(left_flux, 0.0, f"left reflecting[{index}]")
-            assert_close(right_flux, 0.0, f"right reflecting[{index}]")
+        if row["case"] == "reflecting":
+            assert_close(average, 1.0, f"reflecting mean[{index}]")
+
+
+def validate_figure_files():
+    expected = {
+        "fig_model_schematic.pdf",
+        "fig_barnett_estimate.pdf",
+        "fig_relaxation_response.pdf",
+        "fig_length_scaling.pdf",
+        "fig_contact_transparency.pdf",
+        "fig_spin_diffusion_landscape.pdf",
+    }
+    actual = {path.name for path in FIGURES.glob("*.pdf")}
+    if actual != expected:
+        raise AssertionError(f"figure set differs: actual={sorted(actual)}")
+    for filename in expected:
+        if (FIGURES / filename).stat().st_size < 1_000:
+            raise AssertionError(f"figure file is unexpectedly small: {filename}")
 
 
 def main():
     validate_constants()
     validate_barnett()
+    validate_barnett_table()
     validate_relaxation()
     validate_length_scaling()
     validate_diffusion_map()
     validate_contacts()
-    print("Validated constants and all generated numerical data.")
+    validate_figure_files()
+    print("Validated constants, table, figures, and all generated numerical data.")
 
 
 if __name__ == "__main__":
