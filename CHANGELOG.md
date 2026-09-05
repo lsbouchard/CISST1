@@ -1,5 +1,31 @@
 # Change log
 
+## Hahn-inspired CISS mechanism restored - 2026-09-05
+
+- Rebuilt the main text around helical Rashba coupling, the Barnett spin-frame
+  term, spin--lattice alignment, and transmitted physical-spin polarization.
+- Based the physical construction partly on Hahn, Tenn, and Augustine (2006),
+  distinguishing their rotating nuclear-spin and prepared-order calculations
+  from the explicitly assumed electronic transport bath used here.
+- Transformed the Hamiltonian and Rashba-amplitude bath together; derived
+  thermal transition rates, a completely positive master equation, rotating-frame
+  T1/T2, the alignment target, and finite-transit/residence-time predictions.
+- Added an explicit lab-fixed bath control with shifted transition frequencies;
+  did not assume that any thermal bath equilibrates the rotating-frame field.
+- Distinguished dissipative outgoing spin polarization from coherent elastic
+  filtering, and specified orbital work, torque, and reservoir-matching limits.
+- Distinguished the canonical helical screw generator from bare orbital
+  angular momentum, and stated semiclassical and dilute-injection assumptions.
+- Derived and numerically checked the finite-flight frequency response; its
+  single-pole limit requires residence long compared with the alignment time.
+- Added three mechanism figures, source CSV/JSON files, and eight regression
+  tests (30 total), including independent frame-covariant dynamics integration.
+- Moved generic device spectroscopy, kinetic matching, and reduction results
+  to appendices while preserving Appendix C's explicit operator derivations.
+- Retitled the paper `A Barnett Mechanism for Chiral Spin Transport` and removed
+  obsolete prose restricting the Barnett role to an auxiliary response coordinate.
+- Retained the minimal TeX-plus-figures ZIP and separate reproducible code ZIP.
+
 ## Mode-resolved spectroscopy and nonuniform layers - 2026-09-05
 
 - Derived a directly testable relation between electrical modal weights and

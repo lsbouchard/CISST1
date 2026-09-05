@@ -312,5 +312,151 @@ class SpectralTests(unittest.TestCase):
             self.assertLessEqual(abs(response-dc), abs(omega)/min(fast_rates)*dc)
 
 
+class HahnMechanismTests(unittest.TestCase):
+    def test_rotating_hamiltonian_and_coupling(self):
+        from hahn_transport import Helix, SY, SZ
+        model = Helix()
+        for time in [0., .3, 2., 5.]:
+            U = model.unitary(time)
+            a = model.zeta*model.omega
+            lab = a*(-U@SY@U.conj().T+model.chi*model.pitch_ratio*SZ)/2
+            np.testing.assert_allclose(U.conj().T@lab@U-model.rotation*SZ/2,
+                                       model.hamiltonian, atol=1e-14)
+            coupling_lab = U@model.coupling@U.conj().T
+            np.testing.assert_allclose(U.conj().T@coupling_lab@U, model.coupling, atol=1e-14)
+            np.testing.assert_allclose(U.conj().T@SZ@U, SZ, atol=1e-14)
+            step = 1e-5
+            plus, minus = model.unitary(time+step), model.unitary(time-step)
+            derivative_phi = (plus@model.coupling@plus.conj().T
+                              -minus@model.coupling@minus.conj().T)/(2*step*model.rotation)
+            np.testing.assert_allclose(derivative_phi,
+                                       -1j*(SZ@coupling_lab-coupling_lab@SZ)/2,
+                                       atol=1e-10)
+        mass, radius, pitch, omega = 2., .7, 1.3, -.8
+        for chirality in [-1, 1]:
+            axial_momentum = mass*chirality*pitch*omega
+            orbital_lz = mass*radius**2*omega
+            self.assertAlmostEqual(orbital_lz+chirality*pitch*axial_momentum,
+                                   mass*(radius**2+pitch**2)*omega)
+
+    def test_thermal_rates_and_gibbs_state(self):
+        from hahn_transport import Helix, dissipator
+        from scipy.linalg import expm
+        for model in [Helix(), Helix(theta=2., omega=.2), Helix(omega=3., zeta=.3)]:
+            for frequency in [.001, .1, 1., 10.]:
+                self.assertAlmostEqual(model.spectrum(-frequency)/model.spectrum(frequency),
+                                       np.exp(-frequency/(model.theta*model.omega_c)), delta=1e-13)
+            down, up, _ = model.rates()
+            gap = np.linalg.norm(model.vector)
+            self.assertAlmostEqual(up/down, np.exp(-gap/(model.theta*model.omega_c)))
+            rho = expm(-model.hamiltonian/(model.theta*model.omega_c))
+            rho /= np.trace(rho)
+            np.testing.assert_allclose(dissipator(rho, model.jumps()), 0., atol=1e-13)
+            self.assertAlmostEqual(model.target(), -model.axis[2]*np.tanh(gap/(2*model.theta*model.omega_c)))
+
+    def test_master_equation_and_positivity(self):
+        from hahn_transport import Helix, IDENTITY, SZ, dissipator
+        from scipy.integrate import solve_ivp
+        model = Helix()
+        down, up, _ = model.rates()
+        total = down+up
+        jumps = model.jumps()
+        def rhs(t, vector):
+            rho = vector.reshape((2, 2))
+            H = model.hamiltonian
+            return (-1j*(H@rho-rho@H)+dissipator(rho, jumps)).ravel()
+        times = np.linspace(0, 4/total, 25)
+        result = solve_ivp(rhs, (0, times[-1]), (IDENTITY/2).ravel(), t_eval=times,
+                           rtol=1e-8, atol=1e-10, method="DOP853")
+        self.assertTrue(result.success)
+        for time, vector in zip(times, result.y.T):
+            rho = vector.reshape((2, 2))
+            self.assertAlmostEqual(np.trace(rho).real, 1., places=9)
+            self.assertGreaterEqual(np.linalg.eigvalsh(rho).min(), -1e-9)
+            self.assertAlmostEqual(np.trace(rho@SZ).real, float(model.polarization(time)), delta=2e-8)
+
+    def test_frame_covariance_of_open_dynamics(self):
+        from hahn_transport import Helix, SX, SZ, IDENTITY, dissipator
+        from scipy.integrate import solve_ivp
+        model = Helix()
+        initial = (IDENTITY+.3*SX+.2*SZ)/2
+        jumps = model.jumps()
+        def rhs(t, vector, lab):
+            rho = vector.reshape((2, 2))
+            U = model.unitary(t)
+            H = model.hamiltonian
+            operators = jumps
+            if lab:
+                H = U@H@U.conj().T+model.rotation*SZ/2
+                operators = [U@j@U.conj().T for j in jumps]
+            return (-1j*(H@rho-rho@H)+dissipator(rho, operators)).ravel()
+        times = np.linspace(0, 60., 31)
+        results = [solve_ivp(lambda t, y: rhs(t, y, lab), (0, 60.), initial.ravel(),
+                             t_eval=times, rtol=1e-9, atol=1e-11, method="DOP853") for lab in [False, True]]
+        self.assertTrue(all(r.success for r in results))
+        for i, t in enumerate(times):
+            U = model.unitary(t)
+            rotated = U@results[0].y[:, i].reshape((2, 2))@U.conj().T
+            np.testing.assert_allclose(rotated, results[1].y[:, i].reshape((2, 2)), atol=2e-8)
+
+    def test_zero_soc_chirality_and_flow(self):
+        from hahn_transport import Helix
+        times = np.array([0., 1., 100., 10000.])
+        np.testing.assert_array_equal(Helix(zeta=0., g=0.).polarization(times), 0.)
+        base = Helix().polarization(times)
+        np.testing.assert_allclose(Helix(chi=-1).polarization(times), -base, atol=1e-13)
+        np.testing.assert_allclose(Helix(flow=-1).polarization(times), -base, atol=1e-13)
+        small = [float(Helix(zeta=.15*scale, g=.08*scale).polarization(100.)) for scale in [1e-3, 2e-3]]
+        self.assertAlmostEqual(small[1]/small[0], 4., delta=.003)
+
+    def test_lab_fixed_sidebands_and_zero_field_limit(self):
+        from hahn_transport import Helix, SX, SP, SM
+        for flow in [-1, 1]:
+            model = Helix(zeta=0., flow=flow)
+            down, up, _ = model.rates("lab_fixed")
+            self.assertAlmostEqual(down, up, delta=1e-14)
+            self.assertAlmostEqual(model.target("lab_fixed"), 0., delta=1e-14)
+            t = .7
+            U = model.unitary(t)
+            np.testing.assert_allclose(U.conj().T@SX@U,
+                SP*np.exp(1j*model.rotation*t)+SM*np.exp(-1j*model.rotation*t), atol=1e-14)
+        self.assertGreater(abs(Helix().target()-Helix().target("lab_fixed")), .1)
+
+    def test_residence_average_and_unit_scaling(self):
+        from hahn_transport import Helix, flight_response
+        from scipy.integrate import quad
+        model = Helix()
+        down, up, _ = model.rates()
+        mean = 1000.
+        integral = quad(lambda x: float(model.polarization(mean*x))*np.exp(-x), 0, np.inf)[0]
+        expected = model.target()*mean*(down+up)/(1+mean*(down+up))
+        self.assertAlmostEqual(integral, expected, places=10)
+        self.assertLess(integral, float(model.polarization(mean)))
+        scaled = Helix(omega=1e13, g=.08e13, omega_c=1e13)
+        self.assertAlmostEqual(float(scaled.polarization(mean/1e13)), float(model.polarization(mean)), places=12)
+        gamma = down+up
+        for frequency in [0., gamma, 10*gamma, -gamma]:
+            real = quad(lambda a: gamma*np.exp(-gamma*a)*np.cos(frequency*a), 0, mean)[0]
+            imag = quad(lambda a: gamma*np.exp(-gamma*a)*np.sin(frequency*a), 0, mean)[0]
+            self.assertAlmostEqual(flight_response(gamma, mean, frequency), real+1j*imag, places=12)
+        self.assertAlmostEqual(flight_response(gamma, 100/gamma, gamma), 1/(1-1j), places=12)
+        self.assertEqual(flight_response(0., mean, 0.), 0.)
+        self.assertEqual(flight_response(gamma, 0., gamma), 0.)
+
+    def test_invalid_inputs_and_weak_linewidths(self):
+        from hahn_transport import Helix, example_data
+        for kwargs in [dict(omega=0), dict(g=-1), dict(theta=0), dict(chi=0), dict(zeta=np.nan)]:
+            with self.assertRaises(ValueError):
+                Helix(**kwargs)
+        with self.assertRaises(ValueError):
+            Helix().rates("unspecified")
+        with self.assertRaises(ValueError):
+            Helix().polarization(-1.)
+        _, _, rows, _ = example_data()
+        for row in rows:
+            self.assertLess(row["Gamma1_over_omega_c"], .01*row["omega_over_cutoff"])
+            self.assertLess(abs(row["Pz_ten_turns"]), 1.)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

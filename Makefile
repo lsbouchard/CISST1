@@ -9,6 +9,7 @@ figures:
 	$(PYTHON) scripts/reciprocal_device.py
 	$(PYTHON) scripts/robustness.py
 	$(PYTHON) scripts/spectral_tests.py
+	$(PYTHON) scripts/hahn_transport.py
 
 validate: figures
 	$(PYTHON) scripts/validate_outputs.py

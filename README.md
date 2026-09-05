@@ -1,12 +1,12 @@
 # CISST1
 
-Reproducible calculations for **Relaxation and Reciprocity in Chiral Spin
-Transport**, by Mohamad Niknam and Louis-S. Bouchard (September 5, 2026).
+Reproducible calculations for **A Barnett Mechanism for Chiral Spin Transport**,
+by Mohamad Niknam and Louis-S. Bouchard (September 5, 2026).
 
 Repository: https://github.com/lsbouchard/CISST1
 
 The minimal Overleaf ZIP is separate: it contains only self-contained `main.tex`
-and the nine figure PDFs actually used by the paper. Bibliography and tables
+and the twelve figure PDFs actually used by the paper. Bibliography and tables
 are embedded in the TeX file. The codebase contains no manuscript PDF or
 third-party publications. An optional diffusion landscape remains reproducible
 but is not a manuscript figure.
@@ -23,16 +23,61 @@ python3 -m venv .venv
 .venv/bin/python scripts/reciprocal_device.py
 .venv/bin/python scripts/robustness.py
 .venv/bin/python scripts/spectral_tests.py
+.venv/bin/python scripts/hahn_transport.py
 .venv/bin/python scripts/validate_outputs.py
 .venv/bin/python scripts/test_models.py
 ```
 
-The generators recreate ten figure PDFs, all CSV/JSON data, and three tables.
+The generators recreate thirteen figure PDFs, all CSV/JSON data, and three tables.
 Do not edit generated numbers. Change model inputs in the scripts and rerun.
 PDF timestamps are stripped. Repeatability is tested on the same pinned runtime;
 other BLAS libraries can change last digits, so validation uses tolerances.
 
 ## Models
+
+The main mechanism is implemented in `hahn_transport.py`: a selected directed
+helical trajectory samples a rotating Rashba interaction and Rashba-amplitude
+fluctuations. Transforming both gives a stationary spin-plus-bath problem.
+Weak-coupling thermal transition rates produce a dressed alignment target and
+population relaxation time, followed by finite-transit outgoing spin polarization.
+Hahn, Tenn, and Augustine (2006) motivate the rotating-interaction/relaxation
+construction; the molecular coupling assumed here is not established by their
+nuclear-spin calculation.
+
+`Helix` accepts traversal frequency magnitude `omega`, mean SOC ratio `zeta`,
+radius-to-pitch-parameter ratio `pitch_ratio`, fluctuating SOC rate `g`, bath
+cutoff `omega_c`, temperature ratio `theta=kB*T/(hbar*omega_c)`, and signed
+chirality/flow. Frequencies and `g` are in 1/s. The bath spectrum has units s.
+The mean Hamiltonian and all jump operators are explicit 2-by-2 matrices;
+`hamiltonian` returns H_rot/hbar in rate units. `rates()` returns the downward
+and upward dressed-state rates and the normalized energy eigenvectors.
+`polarization(time)` returns laboratory physical-spin Pz for unpolarized entry.
+`target()` is undefined (NaN) when both rates vanish, whereas the finite-time
+polarization correctly stays zero. Remove both mean and fluctuating SOC for the
+zero-SOC limit. The API deliberately requires nonzero traversal frequency; it
+does not extrapolate a selected-trajectory model into an equilibrium junction.
+
+`bath="covariant"` uses a Rashba-amplitude coupling rotating with the sampled
+helix. `bath="lab_fixed"` uses a distinct laboratory sigma_x coupling, including
+both frequency-shifted sideband rates. These are different physical baths,
+not different coordinate descriptions of the same bath. `jumps()` implements
+the covariant model's complete secular dissipator, including dephasing.
+
+`flight_response(gamma, transit, frequency)` returns the dimensionless complex
+exit/target response for harmonic target modulation at fixed axis and population
+rate, using exp(-i*frequency*t). Rates/frequencies are in 1/s and transit is in s.
+Its transit numerator is retained; the single-pole result is only a long-flight
+limit. Current modulation generally changes more than this target alone.
+
+The three main figures and their CSV/JSON data cover alignment, the joint
+mean/fluctuating SOC limit at finite transit time, and bath-dependent finite
+transit versus stationary polarization. Parameters are synthetic reference
+units, not experimental molecular estimates. The model gives a dissipative
+spin polarizer, not unequal coherent elastic transmission eigenvalues.
+Inverse CISS still requires matching orbital occupations and reservoir feedback;
+it cannot be inferred by reversing this trajectory formula alone.
+
+## Transport Extensions
 
 `generate_figures.py` implements the stated constants, hypothetical
 trajectory-substituted Barnett estimate, one-mode frequency response, and
@@ -162,10 +207,16 @@ data, power balance, reciprocity, passivity, mesh convergence, load-dependent
 eigenvalue ordering, and identifiability.
 Tests additionally cover unequal-contact root convergence, local feedback,
 both-geometry power balance, determinant identities, and misleading fits under
-contact-model misspecification. The 22 tests include spectral reconstruction,
+contact-model misspecification. Spectral tests include reconstruction,
 residue factorization, load-slope/interlacing checks, 80 randomized tail-bound
 cases, SI rescaling, dark/degenerate modes, nonuniform local power balance, and
 multimode kinetic projection with a controlled fast conductivity background.
+The full suite now has 30 tests. Eight mechanism tests check the exact spin-frame
+transformation, thermal KMS balance and stationary Gibbs state, direct master
+equation integration and positivity, laboratory/rotating open-system covariance,
+zero SOC and reversal symmetries, lab-fixed sideband cancellation, residence-time
+averaging, finite-flight frequency quadrature, screw-coordinate bookkeeping,
+physical-unit rescaling, invalid inputs, and weak rate/gap ratios.
 The GitHub Actions workflow runs the complete regeneration and checks on Python
 3.12 and 3.14. Its result is separate from the author-side PDF build.
 

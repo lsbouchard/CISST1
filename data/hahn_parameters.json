@@ -1,0 +1,30 @@
+{
+  "reference_units": "omega_c=1; theta=kB*T/(hbar*omega_c)=0.2",
+  "base": {
+    "omega": 1.0,
+    "zeta": 0.15,
+    "pitch_ratio": 0.7,
+    "g": 0.08,
+    "omega_c": 1.0,
+    "theta": 0.2,
+    "chi": 1,
+    "flow": 1
+  },
+  "base_gap": 0.9074827822058114,
+  "base_Gamma1": 0.00048783810470786205,
+  "base_target": 0.9653603948411329,
+  "SOC_scan": {
+    "zeta_max": 0.15,
+    "g_max": 0.08,
+    "transit_times": [
+      100.0,
+      1000.0,
+      10000.0
+    ]
+  },
+  "bath_scan": {
+    "g_over_omega": 0.04,
+    "helix_turns": 10
+  },
+  "status": "synthetic mechanism calculations, not a fit to molecular data"
+}
