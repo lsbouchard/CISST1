@@ -1,5 +1,33 @@
 # Change log
 
+## Contact-resolved response release - 2026-09-04
+
+- Retitled the paper `Relaxation and Reciprocity in Chiral Spin Transport`.
+- Replaced the difference-only spin port by independent inward contact currents.
+  Derived a passive spatial three-port admittance and its Onsager identity.
+- Added free-energy power balance, common/differential drive selection, exact
+  Robin poles, synthetic thickness inference, and electrical-load feedback.
+- Separated equilibrium linear response from finite drift and finite-bias
+  differential response; corrected the Kubo sign and electrostatic-bias parity.
+- Fixed the isolated-doublet susceptibility and stated virtual-transition
+  corrections; restricted the Pauli Hamiltonian to weak magnetic fields.
+- Clarified static-potential torque and conjugate-port sign conventions.
+  Separated volume/voltage and Galerkin/eigenfunction notation.
+- Stabilized contact exponentials and roots; added a weighted uniqueness
+  argument, independent BVP checks, and nonfinite/corrupt-data regressions.
+- Added the reciprocal device generator, complete output validation, synthetic
+  inference metadata/table, ten numerical regression tests, and a GitHub Actions
+  workflow for Python 3.12 and 3.14.
+- Corrected Bloom et al.'s authors, updated Cho et al.'s publication details,
+  and added Eckvahl, Latawiec, and Chiesa radical-pair work without equating
+  those correlated dynamics with scalar transport relaxation.
+- Credited earlier relaxation/diffusion/Edelstein models and narrowed novelty
+  to the complete device, operational tests, and inference.
+- Removed the kinematic diffusion map from the paper, retaining code/data;
+  improved plot labels and added full-width operational figures.
+- Preserved two-column REVTeX, UCLA affiliation, no acknowledgments, and the
+  GitHub-only data statement. Kept minimal Overleaf and calculation ZIPs separate.
+
 ## Angular-momentum distinction release - 2026-08-07
 
 - Shortened the title to `Relaxation-Limited Chiral Barnett Response`.

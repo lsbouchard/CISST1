@@ -221,27 +221,13 @@ def generate_barnett_outputs():
     axes[0].set_ylabel(r"equilibrium $P_{\rm B}$ (%)")
     axes[0].set_ylim(0, 105)
     axes[0].legend(frameon=False, loc="upper left")
-    axes[0].text(
-        0.97,
-        0.95,
-        "(a) thermal alignment",
-        transform=axes[0].transAxes,
-        ha="right",
-        va="top",
-    )
+    axes[0].set_title("(a) Hypothetical thermal alignment", fontsize=8)
 
     axes[1].loglog(rates, field)
     axes[1].set_xlabel(r"hopping rate $R_{\rm hop}$ (s$^{-1}$)")
     axes[1].set_ylabel(r"$|B_{\rm B}|$ (T)")
-    axes[1].grid(True, which="both", linewidth=0.3)
-    axes[1].text(
-        0.03,
-        0.95,
-        "(b) equivalent field",
-        transform=axes[1].transAxes,
-        ha="left",
-        va="top",
-    )
+    axes[1].grid(True, which="major", linewidth=0.3, alpha=0.4)
+    axes[1].set_title("(b) Trajectory-substituted field", fontsize=8)
     fig.tight_layout(pad=0.5)
     save_pdf(fig, "fig_barnett_estimate.pdf")
 
@@ -250,7 +236,7 @@ def generate_barnett_outputs():
         handle.write(r"\begin{ruledtabular}" + "\n")
         handle.write(r"\begin{tabular}{cccc}" + "\n")
         handle.write(
-            r"$R_{\rm hop}$ (s$^{-1}$) & $\Omega$ (s$^{-1}$) & "
+            r"$R_{\rm hop}$ (s$^{-1}$) & $\Omega_{\rm traj}$ (s$^{-1}$) & "
             r"$|B_{\rm B}|$ (T) & $P_{\rm B}$ at 300 K (\%)\\" + "\n"
         )
         for rate, angular_rate, magnetic_field, spin_polarization in zip(
@@ -285,7 +271,7 @@ def generate_relaxation_response():
     left_axis.set_xlabel(r"normalized frequency $\omega T_1$")
     left_axis.set_ylabel(r"normalized amplitude")
     left_axis.set_ylim(0, 1.05)
-    left_axis.grid(True, which="both", linewidth=0.3)
+    left_axis.grid(True, which="major", linewidth=0.3, alpha=0.4)
     right_axis = left_axis.twinx()
     right_axis.semilogx(omega_t1, phase_deg, linestyle="--", label="lag")
     right_axis.set_ylabel(r"phase lag (degrees)")
@@ -384,6 +370,7 @@ def generate_diffusion_landscape():
     ax.set_yscale("log")
     ax.set_xlabel(r"$T_1$ (ns)")
     ax.set_ylabel(r"$D_s$ (m$^2$ s$^{-1}$)")
+    ax.set_title("Kinematic map; continuum validity is not implied", fontsize=8)
     colorbar = fig.colorbar(
         color_mesh,
         ax=ax,

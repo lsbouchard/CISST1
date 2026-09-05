@@ -4,6 +4,8 @@
 from pathlib import Path
 import csv
 import math
+import json
+import numpy as np
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -27,7 +29,7 @@ def as_float(row, key):
 
 
 def assert_close(actual, expected, label, rtol=2e-12, atol=1e-14):
-    if not math.isclose(actual, expected, rel_tol=rtol, abs_tol=atol):
+    if not (math.isfinite(actual) and math.isfinite(expected)) or not math.isclose(actual, expected, rel_tol=rtol, abs_tol=atol):
         raise AssertionError(
             f"{label}: actual={actual:.17g}, expected={expected:.17g}"
         )
@@ -182,9 +184,13 @@ def validate_contacts():
         "asymmetric_negative_drift",
         "reflecting_with_drift",
     }
-    if {row["case"] for row in validation} != expected_validation_cases:
+    if len(validation) != len(expected_validation_cases) or {row["case"] for row in validation} != expected_validation_cases:
         raise AssertionError("contact validation cases are incomplete")
     for row in validation:
+        for key in ("max_abs_ode_residual", "max_abs_boundary_residual", "max_abs_balance_residual"):
+            value = as_float(row, key)
+            if not math.isfinite(value) or value < 0:
+                raise AssertionError(f"invalid nonnegative finite residual: {row}")
         if as_float(row, "max_abs_ode_residual") > 1e-10:
             raise AssertionError(f"ODE residual failed: {row}")
         if as_float(row, "max_abs_boundary_residual") > 1e-10:
@@ -195,12 +201,45 @@ def validate_contacts():
     rows = read_rows("contact_transparency.csv")
     if len(rows) != 3 * 220:
         raise AssertionError(f"expected 660 contact rows, found {len(rows)}")
+    for case in ("absorbing", "partial", "reflecting"):
+        lengths = sorted(as_float(r, "L_over_ell_s") for r in rows if r["case"] == case)
+        if len(lengths) != 220:
+            raise AssertionError(f"missing or duplicate contact samples: {case}")
+        for i, value in enumerate(lengths):
+            assert_close(value, .05 + (8. - .05) * i / 219, f"contact length grid {case}[{i}]")
+    from solve_contact_transparency import solve_profile, residuals
+    for row in validation:
+        if row["case"] in {"absorbing", "partial", "reflecting"}:
+            continue
+        L = as_float(row, "length_over_ell")
+        tl, tr, pe = (as_float(row, k) for k in ("tau_left", "tau_right", "peclet"))
+        current = residuals(solve_profile(L, tl, tr, peclet=pe), tl, tr, False)
+        if not all(math.isfinite(v) and 0 <= v <= 1e-10 for v in current):
+            raise AssertionError(f"recomputed contact residual failed: {row['case']}")
     for index, row in enumerate(rows):
         length = as_float(row, "L_over_ell_s")
         average = as_float(row, "average_s_over_s_star")
         left_flux = as_float(row, "left_outward_flux_norm")
         right_flux = as_float(row, "right_outward_flux_norm")
         total_flux = as_float(row, "total_outward_flux_norm")
+        if row["case"] not in {"partial", "reflecting", "absorbing"}:
+            raise AssertionError(f"unknown contact case: {row['case']}")
+        # An independent zero-drift hyperbolic solution checks actual profiles,
+        # not just algebraic relations between values stored by the generator.
+        t = math.tanh(length / 2)
+        if row["case"] == "absorbing":
+            expected_mean, expected_flux = 1 - 2 * t / length, t
+        elif row["case"] == "reflecting":
+            expected_mean, expected_flux = 1., 0.
+        else:
+            tau = as_float(row, "tau_left")
+            assert_close(tau, as_float(row, "tau_right"), "symmetric plotted contacts")
+            expected_flux = tau * t / (tau + t)
+            expected_mean = 1 - 2 * expected_flux / length
+        assert_close(as_float(row, "peclet"), 0., "plotted drift")
+        assert_close(average, expected_mean, f"independent contact mean[{index}]", atol=2e-12)
+        assert_close(left_flux, expected_flux, f"independent left flux[{index}]", atol=2e-12)
+        assert_close(right_flux, expected_flux, f"independent right flux[{index}]", atol=2e-12)
         assert_close(total_flux, left_flux + right_flux, f"flux sum[{index}]")
         assert_close(total_flux, length * (1.0 - average), f"balance[{index}]")
         if row["case"] in {"partial", "reflecting"}:
@@ -231,6 +270,64 @@ def validate_contacts():
             assert_close(average, 1.0, f"reflecting mean[{index}]")
 
 
+def validate_device_outputs():
+    from reciprocal_device import Device, slowest_pole, infer_parameters, node_rate
+    device = Device()
+    rows = read_rows("device_admittance.csv")
+    if len(rows) != 160:
+        raise AssertionError("expected 160 admittance samples")
+    for row, omega in zip(rows, np.logspace(-3, 3, 160)):
+        assert_close(as_float(row, "omega"), omega, "admittance frequency")
+        Y, _ = device.response(omega)
+        for key, value in {"Y_cL_real": Y[0, 1].real, "Y_cL_imag": Y[0, 1].imag,
+                           "Y_Lc_real": Y[1, 0].real, "Y_Lc_imag": Y[1, 0].imag,
+                           "common_inverse_abs": abs(Y[0, 1] + Y[0, 2]),
+                           "differential_inverse_abs": abs(Y[0, 1] - Y[0, 2]),
+                           "minimum_dissipation_eigenvalue": np.linalg.eigvalsh((Y + Y.conj().T)/2).min(),
+                           "reciprocity_error": np.max(abs(Y - np.diag([1., -1., -1.]) @ Y.T @ np.diag([1., -1., -1.])))}.items():
+            assert_close(as_float(row, key), value, key, atol=2e-11)
+    rows = read_rows("device_load_decay.csv")
+    if len(rows) != 90:
+        raise AssertionError("expected 90 electrical loads")
+    short = device.decay_rates()[0]
+    for row, load in zip(rows, np.logspace(-3, 3, 90)):
+        for key, value in {"RG": load*device.G, "spatial_rate": device.decay_rates(load)[0],
+                           "short_rate": short, "node_rate": node_rate(device, load)}.items():
+            assert_close(as_float(row, key), value, key, atol=2e-10)
+    lengths = np.geomspace(.05, 30., 18)
+    exact = np.array([slowest_pole(L, 1., .2, 1.) for L in lengths])
+    observed = exact * np.exp(np.random.default_rng(20260904).normal(0., .02, len(lengths)))
+    fit, singular, covariance = infer_parameters(lengths, observed)
+    inferred = np.exp(fit.x)
+    rows = read_rows("synthetic_thickness.csv")
+    if len(rows) != 18:
+        raise AssertionError("expected 18 synthetic thicknesses")
+    for i, row in enumerate(rows):
+        for key, value in {"length": lengths[i], "exact_rate": exact[i], "synthetic_rate": observed[i],
+                           "fitted_rate": slowest_pole(lengths[i], *inferred), "log_standard_deviation": .02}.items():
+            assert_close(as_float(row, key), value, key, rtol=1e-8)
+    rows = read_rows("synthetic_parameter_recovery.csv")
+    if [r["parameter"] for r in rows] != ["D", "Gamma", "kappa"]:
+        raise AssertionError("incorrect inference parameter set")
+    table = (TABLES / "synthetic_inference.tex").read_text()
+    for i, row in enumerate(rows):
+        for key, value in {"truth": [1., .2, 1.][i], "fitted": inferred[i],
+                           "local_log_standard_error": np.sqrt(covariance[i, i])}.items():
+            assert_close(as_float(row, key), value, key, rtol=1e-6)
+        cells = " & ".join(f"{as_float(row, k):.3f}" for k in ["truth", "fitted", "local_log_standard_error"])
+        if cells not in table:
+            raise AssertionError("inference table does not match data")
+    summary = json.loads((DATA / "device_parameters.json").read_text())
+    if summary["device_parameters"] != device.__dict__ or summary["seed"] != 20260904 or summary["fit_success"] is not True:
+        raise AssertionError("incorrect device metadata")
+    np.testing.assert_allclose(summary["singular_values"], singular, rtol=1e-6)
+    np.testing.assert_allclose(summary["fit_parameter_scales"], fit.parameter_scales, rtol=1e-12)
+    np.testing.assert_allclose(summary["log_covariance"], covariance, rtol=1e-6)
+    assert_close(summary["short_rate"], short, "short rate", atol=2e-10)
+    assert_close(summary["open_rate"], device.decay_rates(np.inf)[0], "open rate", atol=2e-10)
+    assert_close(summary["reduced_chi_squared"], sum(fit.fun**2)/15, "reduced chi squared", rtol=1e-8)
+
+
 def validate_figure_files():
     expected = {
         "fig_model_schematic.pdf",
@@ -239,6 +336,8 @@ def validate_figure_files():
         "fig_length_scaling.pdf",
         "fig_contact_transparency.pdf",
         "fig_spin_diffusion_landscape.pdf",
+        "fig_device_inference.pdf",
+        "fig_reciprocal_ports.pdf",
     }
     actual = {path.name for path in FIGURES.glob("*.pdf")}
     if actual != expected:
@@ -256,6 +355,7 @@ def main():
     validate_length_scaling()
     validate_diffusion_map()
     validate_contacts()
+    validate_device_outputs()
     validate_figure_files()
     print("Validated constants, table, figures, and all generated numerical data.")
 

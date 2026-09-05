@@ -31,7 +31,7 @@ PDF_METADATA = {
 
 @dataclass(frozen=True)
 class AnalyticProfile:
-    """Solution u=1+A exp(r_plus x)+B exp(r_minus x)."""
+    """Solution u=1+A exp(r_plus*(x-length))+B exp(r_minus*x)."""
 
     length: float
     peclet: float
@@ -44,7 +44,7 @@ class AnalyticProfile:
         x_array = np.asarray(x)
         return (
             1.0
-            + self.coefficient_plus * np.exp(self.r_plus * x_array)
+            + self.coefficient_plus * np.exp(self.r_plus * (x_array - self.length))
             + self.coefficient_minus * np.exp(self.r_minus * x_array)
         )
 
@@ -53,7 +53,7 @@ class AnalyticProfile:
         return (
             self.coefficient_plus
             * self.r_plus
-            * np.exp(self.r_plus * x_array)
+            * np.exp(self.r_plus * (x_array - self.length))
             + self.coefficient_minus
             * self.r_minus
             * np.exp(self.r_minus * x_array)
@@ -64,14 +64,14 @@ class AnalyticProfile:
         return (
             self.coefficient_plus
             * self.r_plus**2
-            * np.exp(self.r_plus * x_array)
+            * np.exp(self.r_plus * (x_array - self.length))
             + self.coefficient_minus
             * self.r_minus**2
             * np.exp(self.r_minus * x_array)
         )
 
     def average(self):
-        plus_integral = np.expm1(self.r_plus * self.length) / self.r_plus
+        plus_integral = -np.expm1(-self.r_plus * self.length) / self.r_plus
         minus_integral = np.expm1(self.r_minus * self.length) / self.r_minus
         return (
             self.length
@@ -94,25 +94,32 @@ def solve_profile(
     u=0 at both contacts, the two-sided infinite-transparency limit.
     """
 
-    if length_over_ell <= 0:
-        raise ValueError("length_over_ell must be positive")
     if tau_right is None:
         tau_right = tau_left
-    if not absorbing and (tau_left < 0 or tau_right < 0):
-        raise ValueError("contact transparencies must be nonnegative")
+    if not np.isfinite([length_over_ell, peclet]).all():
+        raise ValueError("length and peclet must be finite")
+    if length_over_ell <= 0:
+        raise ValueError("length_over_ell must be positive")
+    if not absorbing and (not np.isfinite([tau_left, tau_right]).all()
+                          or tau_left < 0 or tau_right < 0):
+        raise ValueError("contact transparencies must be finite and nonnegative")
 
-    discriminant = np.sqrt(peclet**2 + 4.0)
-    r_plus = 0.5 * (peclet + discriminant)
-    r_minus = 0.5 * (peclet - discriminant)
+    discriminant = np.hypot(peclet, 2.0)
+    if peclet >= 0:
+        r_plus = 0.5 * peclet + 0.5 * discriminant
+        r_minus = -1.0 / r_plus
+    else:
+        r_minus = 0.5 * peclet - 0.5 * discriminant
+        r_plus = -1.0 / r_minus
     length = float(length_over_ell)
-    exp_plus = np.exp(r_plus * length)
+    exp_plus = np.exp(-r_plus * length)
     exp_minus = np.exp(r_minus * length)
 
     if absorbing:
         matrix = np.array(
             [
-                [1.0, 1.0],
-                [exp_plus, exp_minus],
+                [exp_plus, 1.0],
+                [1.0, exp_minus],
             ]
         )
         rhs = np.array([-1.0, -1.0])
@@ -120,18 +127,21 @@ def solve_profile(
         matrix = np.array(
             [
                 [
-                    r_plus - peclet - tau_left,
-                    r_minus - peclet - tau_left,
+                    exp_plus * (-r_minus - tau_left),
+                    -r_plus - tau_left,
                 ],
                 [
-                    exp_plus * (r_plus - peclet + tau_right),
-                    exp_minus * (r_minus - peclet + tau_right),
+                    -r_minus + tau_right,
+                    exp_minus * (-r_plus + tau_right),
                 ],
             ]
         )
         rhs = np.array([peclet + tau_left, peclet - tau_right])
 
-    coefficient_plus, coefficient_minus = np.linalg.solve(matrix, rhs)
+    scales = np.max(np.abs(matrix), axis=1)
+    coefficient_plus, coefficient_minus = np.linalg.solve(matrix / scales[:, None], rhs / scales)
+    if not np.isfinite([coefficient_plus, coefficient_minus]).all():
+        raise ValueError("nonfinite contact solution; parameters exceed numerical range")
     return AnalyticProfile(
         length=length,
         peclet=float(peclet),

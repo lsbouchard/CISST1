@@ -1,0 +1,16 @@
+PYTHON ?= python3
+
+.PHONY: all figures validate test
+all: validate
+
+figures:
+	$(PYTHON) scripts/generate_figures.py
+	$(PYTHON) scripts/solve_contact_transparency.py
+	$(PYTHON) scripts/reciprocal_device.py
+
+validate: figures
+	$(PYTHON) scripts/validate_outputs.py
+	$(PYTHON) scripts/test_models.py
+
+test:
+	$(PYTHON) scripts/test_models.py
