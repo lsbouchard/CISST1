@@ -1,0 +1,22 @@
+{
+  "units": "synthetic dimensionless reference units",
+  "parameters": {
+    "length": 1.0,
+    "D": 0.1,
+    "gamma": 0.2,
+    "susceptibility": 1.0,
+    "kappa_left": 1.0,
+    "kappa_right": 0.1,
+    "a": 1.2,
+    "G": 1.0,
+    "cells": 120,
+    "geometry": "lumped"
+  },
+  "first_rate": 0.5516673276657652,
+  "first_weight": 1.3125146670490158,
+  "residual_dc": 0.03634962874291032,
+  "next_rate": 2.2312449282326057,
+  "cutoff": 2.2,
+  "total_dc": 2.4155274433917766,
+  "open_rate": 1.713339085808691
+}

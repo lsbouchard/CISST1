@@ -362,6 +362,30 @@ def validate_robustness():
         np.testing.assert_allclose(actual[key], value, rtol=1e-12)
 
 
+def validate_spectral_outputs():
+    from spectral_tests import example_data
+    modes, frequency, loads, summary = example_data()
+    for filename, expected in [("spectral_modes.csv", modes), ("spectral_admittance.csv", frequency),
+                               ("spectral_load_bounds.csv", loads)]:
+        actual = read_rows(filename)
+        if len(actual) != len(expected):
+            raise AssertionError(f"incorrect spectral sample count: {filename}")
+        for i, (row, reference) in enumerate(zip(actual, expected)):
+            if row.keys() != reference.keys():
+                raise AssertionError(f"incorrect spectral columns: {filename}")
+            for key, value in reference.items():
+                assert_close(float(row[key]), value, f"{filename}[{i}].{key}", rtol=1e-8, atol=1e-10)
+    actual = json.loads((DATA/"spectral_parameters.json").read_text())
+    if actual.keys() != summary.keys():
+        raise AssertionError("incorrect spectral metadata keys")
+    for key, value in summary.items():
+        if isinstance(value, (str, dict)):
+            if actual[key] != value:
+                raise AssertionError(f"incorrect spectral metadata: {key}")
+        else:
+            assert_close(actual[key], value, key, rtol=1e-8, atol=1e-10)
+
+
 def validate_figure_files():
     expected = {
         "fig_model_schematic.pdf",
@@ -373,6 +397,7 @@ def validate_figure_files():
         "fig_device_inference.pdf",
         "fig_reciprocal_ports.pdf",
         "fig_device_loading.pdf",
+        "fig_spectral_load.pdf",
     }
     actual = {path.name for path in FIGURES.glob("*.pdf")}
     if actual != expected:
@@ -392,6 +417,7 @@ def main():
     validate_contacts()
     validate_device_outputs()
     validate_robustness()
+    validate_spectral_outputs()
     validate_figure_files()
     print("Validated constants, table, figures, and all generated numerical data.")
 

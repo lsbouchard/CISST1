@@ -8,6 +8,7 @@ figures:
 	$(PYTHON) scripts/solve_contact_transparency.py
 	$(PYTHON) scripts/reciprocal_device.py
 	$(PYTHON) scripts/robustness.py
+	$(PYTHON) scripts/spectral_tests.py
 
 validate: figures
 	$(PYTHON) scripts/validate_outputs.py

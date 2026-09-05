@@ -6,7 +6,7 @@ Transport**, by Mohamad Niknam and Louis-S. Bouchard (September 5, 2026).
 Repository: https://github.com/lsbouchard/CISST1
 
 The minimal Overleaf ZIP is separate: it contains only self-contained `main.tex`
-and the eight figure PDFs actually used by the paper. Bibliography and tables
+and the nine figure PDFs actually used by the paper. Bibliography and tables
 are embedded in the TeX file. The codebase contains no manuscript PDF or
 third-party publications. An optional diffusion landscape remains reproducible
 but is not a manuscript figure.
@@ -22,11 +22,12 @@ python3 -m venv .venv
 .venv/bin/python scripts/solve_contact_transparency.py
 .venv/bin/python scripts/reciprocal_device.py
 .venv/bin/python scripts/robustness.py
+.venv/bin/python scripts/spectral_tests.py
 .venv/bin/python scripts/validate_outputs.py
 .venv/bin/python scripts/test_models.py
 ```
 
-The generators recreate nine figure PDFs, all CSV/JSON data, and three tables.
+The generators recreate ten figure PDFs, all CSV/JSON data, and three tables.
 Do not edit generated numbers. Change model inputs in the scripts and rerun.
 PDF timestamps are stripped. Repeatability is tested on the same pinned runtime;
 other BLAS libraries can change last digits, so validation uses tolerances.
@@ -99,7 +100,23 @@ recovery data remain available as a regression example, not a robustness claim.
 
 ## Scientific Assumptions
 
-The device assumes a matched scalar spin mode and susceptibility, constant
+`spectral_tests.py` provides `spectrum(device)`, the modal port decomposition;
+`tail_bracket(rate, weight, dc_tail, cutoff, alpha)`, a deterministic bracket
+on the first electrically visible loaded rate; and `series_correction`, the
+positive local electrical loss for piecewise-constant nonuniform coefficients.
+The bracket takes rate/cutoff in 1/s, weight in S/m^2/s, residual dc conductance
+in S/m^2, and alpha = R/(1+R*G) in ohm m^2. It raises an error when its sufficient
+gap condition fails. The caller must independently establish the omitted-rate
+cutoff; an absent fitted peak is not evidence of a gap. Measurement and model
+uncertainty are not part of the returned interval.
+
+The spectral example exports every modal weight, frequency sample, and load
+bound to CSV, and records the inputs in `spectral_parameters.json`. The loaded
+rates are calculated by direct diagonalization, separately from the bounds.
+No measurement is fitted. The weighted local correction is independently tested
+against charge conservation, the uneliminated field, and electrical power.
+
+`Device` assumes a matched scalar spin mode and susceptibility, constant
 coefficients, Markovian bulk relaxation, passive contacts, and a specified
 electrical geometry with charge response faster than the spin bandwidth.
 Fast-sector elimination generally changes dynamic capacity: a stable static
@@ -122,6 +139,16 @@ not justify this last formula if other electrical spin modes carry dc weight.
 The bare G must be independently calibrated or resolved in a suitable frequency
 window. Neither identity uniquely identifies CISS.
 
+More usefully, every simple short-circuit pole has initial load slope equal to
+its electrical spectral numerator weight. These electrical self-response weights
+are nonnegative; arbitrary spin-detector and cross-response weights need not be.
+An isolated visible pole also gives a rank-one signed three-port numerator;
+degeneracy replaces its pairwise factorization equality by an inequality.
+Dark modes and mode crossings must be tracked explicitly. These statements
+require a self-adjoint relaxation generator and a memoryless electrical load,
+not merely passivity. The manuscript generalizes the construction to nonuniform
+layers and to several kinetic distribution modes with physical-spin readout.
+
 The thickness data are **synthetic**, with seed 20260904 and 2% Gaussian noise
 in log rate. No experimental amplitude or fitted experimental relaxation time
 is claimed. Fit uncertainties are conditional on the model and known noise.
@@ -135,7 +162,10 @@ data, power balance, reciprocity, passivity, mesh convergence, load-dependent
 eigenvalue ordering, and identifiability.
 Tests additionally cover unequal-contact root convergence, local feedback,
 both-geometry power balance, determinant identities, and misleading fits under
-contact-model misspecification.
+contact-model misspecification. The 22 tests include spectral reconstruction,
+residue factorization, load-slope/interlacing checks, 80 randomized tail-bound
+cases, SI rescaling, dark/degenerate modes, nonuniform local power balance, and
+multimode kinetic projection with a controlled fast conductivity background.
 The GitHub Actions workflow runs the complete regeneration and checks on Python
 3.12 and 3.14. Its result is separate from the author-side PDF build.
 

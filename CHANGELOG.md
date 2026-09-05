@@ -1,5 +1,28 @@
 # Change log
 
+## Mode-resolved spectroscopy and nonuniform layers - 2026-09-05
+
+- Derived a directly testable relation between electrical modal weights and
+  initial load-induced rate slopes, with the finite-load secular equation.
+- Added rigorous unresolved-mode bounds using residual dc conductance and an
+  independently justified lower bound on omitted rates. Added a figure and
+  source CSV/JSON files; its band is truncation error, not experimental error.
+- Derived positivity/complete monotonicity of the electrical self-response and
+  rank-one cross-port pole factorization, with dark-mode and degeneracy limits.
+  Distinguished these properties from signed physical-spin detector weights.
+- Extended local electrical elimination to nonuniform material coefficients
+  through a weighted-variance loss. Stated the conjugate-potential flux law,
+  interface matching, weak operator domain, coercivity, and continuum spectrum.
+- Relaxed the invariant-physical-spin assumption to a kinetic spectral subspace,
+  defined physical-spin readout, and bounded the fast conductivity approximation.
+- Updated the abstract, operational protocol, predictions, novelty comparison,
+  and conclusions around calibrated cross-measurement tests. No microscopic
+  source or experimental agreement is claimed from the new algebra.
+- Added six regression tests (22 total), including 80 randomized truncation
+  cases, independent loaded diagonalization, unit rescaling, and local power.
+- Preserved the two-column template, explicit Appendix C derivations, source
+  data, minimal TeX-plus-figures archive, and separate reproducible code bundle.
+
 ## Controlled reduction and inference robustness - 2026-09-05
 
 - Moved the contact-resolved device and electrical-load results to the front;

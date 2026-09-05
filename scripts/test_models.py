@@ -202,5 +202,115 @@ class ReciprocalTests(unittest.TestCase):
             self.assertLessEqual(abs(exact-reduced), bound+2e-11)
 
 
+class SpectralTests(unittest.TestCase):
+    def test_modal_reconstruction_and_port_factorization(self):
+        from spectral_tests import spectrum
+        E = np.diag([1., -1., -1.])
+        for geometry in ["lumped", "local"]:
+            device = Device(cells=40, D=.1, a=1.2, kappa_left=1., kappa_right=.1, geometry=geometry)
+            rates, overlaps = spectrum(device)
+            _, _, _, direct = device.stiffness()
+            for omega in [.01, 1., 100.]:
+                reconstructed = np.diag(direct)+E@overlaps.T@(overlaps/(rates-1j*omega)[:, None])
+                measured, _ = device.response(omega)
+                np.testing.assert_allclose(reconstructed, measured, atol=1e-10)
+            for d in overlaps:
+                Z = E@np.outer(d, d)
+                self.assertAlmostEqual(Z[0, 1]**2, -Z[0, 0]*Z[1, 1], delta=1e-10)
+            weights = overlaps[:, 0]**2
+            for t in [.01, 1., 10.]:
+                for order in range(5):
+                    self.assertGreaterEqual(np.sum(weights*rates**order*np.exp(-rates*t)), 0.)
+
+    def test_load_slopes_and_interlacing(self):
+        from spectral_tests import spectrum
+        device = Device(cells=40, D=.1, a=1.2, kappa_left=1., kappa_right=.1)
+        rates, overlaps = spectrum(device)
+        # A one-sided second-order stencil only uses passive nonnegative loads.
+        step = 1e-4
+        r1 = device.decay_rates(step, count=6)
+        r2 = device.decay_rates(2*step, count=6)
+        slope = (-3*rates[:6]+4*r1-r2)/(2*step)
+        np.testing.assert_allclose(slope, overlaps[:6, 0]**2, rtol=2e-5, atol=1e-8)
+        for load in [.01, 1., np.inf]:
+            loaded = device.decay_rates(load, count=device.cells)
+            self.assertTrue((loaded >= rates-1e-10).all())
+            self.assertTrue((loaded[:-1] <= rates[1:]+1e-10).all())
+
+    def test_tail_bounds_random_spectra_and_units(self):
+        from spectral_tests import tail_bracket
+        rng = np.random.default_rng(20260905)
+        for _ in range(80):
+            rates = np.r_[.3, np.sort(rng.uniform(2., 30., 7))]
+            weights = rng.uniform(.001, 2., 8)
+            cutoff = .95*rates[1]
+            tail = np.sum(weights[1:]/rates[1:])
+            alpha = min(.4, .6*(cutoff-rates[0])/weights[0])
+            lo, hi = tail_bracket(rates[0], weights[0], tail, cutoff, alpha)
+            exact = np.linalg.eigvalsh(np.diag(rates)+alpha*np.outer(np.sqrt(weights), np.sqrt(weights)))[0]
+            self.assertLessEqual(lo, exact+1e-12)
+            self.assertLessEqual(exact, hi+1e-12)
+            scaled = tail_bracket(rates[0]*1e9, weights[0]*1e21, tail*1e12, cutoff*1e9, alpha/1e12)
+            np.testing.assert_allclose(np.asarray(scaled)/1e9, [lo, hi], rtol=1e-12)
+        self.assertEqual(tail_bracket(1., 2., 0., 10., .5), (2., 2.))
+        self.assertEqual(tail_bracket(1., 2., .1, 10., 0.), (1., 1.))
+        for arguments in [(1., 2., .1, 1.1, 1.), (1., 2., -.1, 3., .1),
+                          (1., 2., .1, np.nan, .1), (1., 0., .1, 3., .1)]:
+            with self.assertRaises(ValueError):
+                tail_bracket(*arguments)
+
+    def test_dark_and_degenerate_modes(self):
+        rates = np.array([.1, 1., 1., 4.])
+        vertex = np.array([0., 2., 3., 1.])
+        for alpha in [.1, 1., 10.]:
+            loaded = np.linalg.eigvalsh(np.diag(rates)+alpha*np.outer(vertex, vertex))
+            self.assertAlmostEqual(loaded[0], .1)
+            self.assertAlmostEqual(loaded[1], 1.)
+        # A degenerate level has a PSD sum of residues, not necessarily rank one.
+        overlaps = np.array([[1., 2., 3.], [2., -1., 1.]])
+        residue = overlaps.T@overlaps
+        self.assertLess(residue[0, 1]**2, residue[0, 0]*residue[1, 1])
+
+    def test_heterogeneous_local_elimination(self):
+        from spectral_tests import series_correction
+        widths = np.array([.1, .2, .3, .4])
+        rho = np.array([1., 3., .4, 2.])
+        beta = np.array([1., -.5, 2., -.8])
+        G, vertex, K = series_correction(widths, rho, beta)
+        h, voltage = np.array([.4, .3, -.2, .1]), .7
+        current = G*voltage+vertex@h
+        field = rho*(current-beta*h)
+        self.assertAlmostEqual(widths@field, voltage)
+        np.testing.assert_allclose(widths*beta*field, vertex*voltage-K@h, atol=1e-14)
+        self.assertAlmostEqual(np.sum(widths*field**2/rho), G*voltage**2+h@K@h)
+        self.assertGreaterEqual(np.linalg.eigvalsh(K).min(), -1e-12)
+        np.testing.assert_allclose(K@(1/beta), 0., atol=1e-14)
+        self.assertGreater(np.linalg.norm(K@np.ones(4)), .1)
+        _, _, uniform = series_correction(np.ones(4)/4, np.ones(4), np.ones(4)*2)
+        np.testing.assert_allclose(uniform, np.eye(4)-np.ones((4, 4))/4)
+        for arrays in [([1.], [1., 2.], [1.]), ([1.], [0.], [1.]), ([1.], [1.], [np.nan])]:
+            with self.assertRaises(ValueError):
+                series_correction(*arrays)
+
+    def test_multimode_kinetic_reduction(self):
+        weights = np.diag([2., 3., 4.])
+        modes = np.diag([1., 2., 3.])
+        capacities = np.diag(modes.T@weights@modes)
+        projector = sum(np.outer(modes[:, n], modes[:, n]@weights)/capacities[n] for n in [0, 1])
+        np.testing.assert_allclose(projector@projector, projector)
+        spin, velocity = np.array([1., -2., .5]), np.array([.3, .4, .6])
+        h = np.array([.1, .2])
+        psi = modes[:, :2]@h
+        p = spin@weights@modes/capacities
+        self.assertAlmostEqual(spin@weights@psi, np.sum(p[:2]*capacities[:2]*h))
+        beta = -modes.T@weights@velocity
+        self.assertAlmostEqual(-velocity@weights@psi, beta[:2]@h)
+        fast_rates, fast_weights = np.array([10., 20.]), np.array([1., 3.])
+        dc = np.sum(fast_weights/fast_rates)
+        for omega in [.1, 1., 10.]:
+            response = np.sum(fast_weights/(fast_rates-1j*omega))
+            self.assertLessEqual(abs(response-dc), abs(omega)/min(fast_rates)*dc)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
