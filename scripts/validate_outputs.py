@@ -328,6 +328,40 @@ def validate_device_outputs():
     assert_close(summary["reduced_chi_squared"], sum(fit.fun**2)/15, "reduced chi squared", rtol=1e-8)
 
 
+def validate_robustness():
+    from robustness import contact_fits, length_information, load_data, port_data, elimination_data
+    samples, fits = contact_fits()
+    expected_sets = [("contact_misspecification.csv", samples),
+                     ("contact_misspecification_fits.csv", fits),
+                     ("length_identifiability.csv", length_information()),
+                     ("geometry_load_comparison.csv", load_data()),
+                     ("asymmetric_port_response.csv", port_data())]
+    for filename, expected in expected_sets:
+        actual = read_rows(filename)
+        if len(actual) != len(expected):
+            raise AssertionError(f"incorrect sample count: {filename}")
+        for i, (row, ref) in enumerate(zip(actual, expected)):
+            if row.keys() != ref.keys():
+                raise AssertionError(f"incorrect columns: {filename}")
+            for key, value in ref.items():
+                if isinstance(value, str):
+                    if row[key] != value:
+                        raise AssertionError(f"incorrect label: {filename}")
+                else:
+                    assert_close(float(row[key]), value, f"{filename}[{i}].{key}", rtol=1e-6, atol=2e-9)
+    for row in read_rows("geometry_load_comparison.csv"):
+        assert_close(float(row['pole_product']), float(row['electrical_prediction']),
+                     "load determinant identity", rtol=1e-9)
+    table = (TABLES/"contact_misspecification.tex").read_text()
+    for row in fits:
+        values = [row['D'], row['Gamma'], row['kappa'], 100*row['rms_log_mismatch']]
+        if " & ".join(f"{value:.3f}" for value in values) not in table:
+            raise AssertionError("misspecification table differs from source data")
+    actual = json.loads((DATA/"dynamic_elimination.json").read_text())
+    for key, value in elimination_data().items():
+        np.testing.assert_allclose(actual[key], value, rtol=1e-12)
+
+
 def validate_figure_files():
     expected = {
         "fig_model_schematic.pdf",
@@ -338,6 +372,7 @@ def validate_figure_files():
         "fig_spin_diffusion_landscape.pdf",
         "fig_device_inference.pdf",
         "fig_reciprocal_ports.pdf",
+        "fig_device_loading.pdf",
     }
     actual = {path.name for path in FIGURES.glob("*.pdf")}
     if actual != expected:
@@ -356,6 +391,7 @@ def main():
     validate_diffusion_map()
     validate_contacts()
     validate_device_outputs()
+    validate_robustness()
     validate_figure_files()
     print("Validated constants, table, figures, and all generated numerical data.")
 

@@ -1,12 +1,12 @@
 # CISST1
 
 Reproducible calculations for **Relaxation and Reciprocity in Chiral Spin
-Transport**, by Mohamad Niknam and Louis-S. Bouchard (September 4, 2026).
+Transport**, by Mohamad Niknam and Louis-S. Bouchard (September 5, 2026).
 
 Repository: https://github.com/lsbouchard/CISST1
 
 The minimal Overleaf ZIP is separate: it contains only self-contained `main.tex`
-and the seven figure PDFs actually used by the paper. Bibliography and tables
+and the eight figure PDFs actually used by the paper. Bibliography and tables
 are embedded in the TeX file. The codebase contains no manuscript PDF or
 third-party publications. An optional diffusion landscape remains reproducible
 but is not a manuscript figure.
@@ -21,11 +21,12 @@ python3 -m venv .venv
 .venv/bin/python scripts/generate_figures.py
 .venv/bin/python scripts/solve_contact_transparency.py
 .venv/bin/python scripts/reciprocal_device.py
+.venv/bin/python scripts/robustness.py
 .venv/bin/python scripts/validate_outputs.py
 .venv/bin/python scripts/test_models.py
 ```
 
-The generators recreate eight figure PDFs, all CSV/JSON data, and two tables.
+The generators recreate nine figure PDFs, all CSV/JSON data, and three tables.
 Do not edit generated numbers. Change model inputs in the scripts and rerun.
 PDF timestamps are stripped. Repeatability is tested on the same pinned runtime;
 other BLAS libraries can change last digits, so validation uses tolerances.
@@ -58,11 +59,12 @@ import sys
 sys.path.insert(0, "scripts")
 from reciprocal_device import Device, slowest_pole, infer_parameters
 
-device = Device(cells=120)
+device = Device(cells=120, geometry="lumped")
 Y, states = device.response(omega=1.0)
 short_rates = device.decay_rates(load=0.0)
 open_rates = device.decay_rates(load=float("inf"))
 rate = slowest_pole(length=1.0, D=1.0, gamma=0.2, kappa=1.0)
+local_device = Device(cells=120, geometry="local")
 ```
 
 `slowest_pole` is the exact lowest symmetric Robin pole. `infer_parameters`
@@ -76,10 +78,32 @@ rank-deficient fits are rejected. SI-unit invariance is regression-tested.
 A full-rank Jacobian does not exclude poor conditioning, model error, parameter
 drift across samples, or incorrect mode identification.
 
+`geometry="lumped"` denotes reversible coupling of all spin elements to one
+voltage port. `geometry="local"` denotes a uniform series conductor with
+sigma = G*length and beta = a*length. The latter adds
+`(beta**2/sigma)*(h - mean(h))` to spin loss, as required by local charge
+conservation. Fast charge response alone does not make these geometries equal.
+`stiffness()` returns capacity per cell, the full symmetric loss matrix, port
+coupling matrix, and bare port conductances. Both geometries obey the same
+passivity, reciprocity, and resistive-load determinant identities.
+
+`asymmetric_pole` computes the lowest scalar Robin rate for unequal finite
+contacts. It intentionally excludes local electrical feedback. It is validated
+against a separate finite-volume discretization, including a reflecting end.
+
+`robustness.py` generates contact-misspecification fits, restricted-length
+information matrices, asymmetric port responses, comparisons of the two
+electrical geometries, and the dynamic-capacity counterexample. It replaces
+roundoff-only plots with physical contact asymmetry. The same-model noisy
+recovery data remain available as a regression example, not a robustness claim.
+
 ## Scientific Assumptions
 
-The device assumes a scalar spin mode, constant coefficients, Markovian bulk
-relaxation, passive contacts, and charge response faster than the spin bandwidth.
+The device assumes a matched scalar spin mode and susceptibility, constant
+coefficients, Markovian bulk relaxation, passive contacts, and a specified
+electrical geometry with charge response faster than the spin bandwidth.
+Fast-sector elimination generally changes dynamic capacity: a stable static
+Schur complement is not by itself the observed inverse relaxation time.
 The conversion vertex is an input, not derived from chirality or trajectory
 curvature. Physical spin, orbital angular momentum, total electronic angular
 momentum, mechanical rotation, and Kramers pseudospin are distinct.
@@ -91,17 +115,27 @@ adds a positive-semidefinite term to the decay operator. This prediction does
 not cover circuit memory, finite-bias nonlinear response, or contact/material
 changes with load.
 
+For a finite model, the product of all loaded-to-short-circuit pole ratios is
+`(1 + R*Ycc(0))/(1 + R*G)`. In a truly uniform single-node limit,
+`lambda_open/lambda_short = Ycc(0)/G`. An apparently dominant measured pole does
+not justify this last formula if other electrical spin modes carry dc weight.
+The bare G must be independently calibrated or resolved in a suitable frequency
+window. Neither identity uniquely identifies CISS.
+
 The thickness data are **synthetic**, with seed 20260904 and 2% Gaussian noise
 in log rate. No experimental amplitude or fitted experimental relaxation time
 is claimed. Fit uncertainties are conditional on the model and known noise.
 
 ## Verification
 
-`validate_outputs.py` recalculates every series and both tables and rejects
+`validate_outputs.py` recalculates every series and all three tables and rejects
 nonfinite residuals and incomplete samples. `test_models.py` also checks an
 independent boundary-value solver, limiting cases, extreme contacts, corrupted
 data, power balance, reciprocity, passivity, mesh convergence, load-dependent
 eigenvalue ordering, and identifiability.
+Tests additionally cover unequal-contact root convergence, local feedback,
+both-geometry power balance, determinant identities, and misleading fits under
+contact-model misspecification.
 The GitHub Actions workflow runs the complete regeneration and checks on Python
 3.12 and 3.14. Its result is separate from the author-side PDF build.
 

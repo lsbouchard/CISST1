@@ -7,6 +7,7 @@ figures:
 	$(PYTHON) scripts/generate_figures.py
 	$(PYTHON) scripts/solve_contact_transparency.py
 	$(PYTHON) scripts/reciprocal_device.py
+	$(PYTHON) scripts/robustness.py
 
 validate: figures
 	$(PYTHON) scripts/validate_outputs.py

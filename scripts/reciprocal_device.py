@@ -13,7 +13,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.linalg import solve_banded, eigh
+from scipy.linalg import solve_banded, solve, eigh
 from scipy.optimize import brentq, least_squares
 
 METADATA = {"CreationDate": None, "ModDate": None,
@@ -37,8 +37,11 @@ class Device:
     a: float = 0.7
     G: float = 1.0
     cells: int = 120
+    geometry: str = "lumped"
 
     def matrices(self):
+        if self.geometry not in {"lumped", "local"}:
+            raise ValueError("geometry must be lumped or local")
         positive = [self.length, self.D, self.gamma, self.susceptibility, self.G]
         if not np.isfinite(positive + [self.a]).all() or min(positive) <= 0:
             raise ValueError("finite positive length, D, gamma, susceptibility, G required")
@@ -62,6 +65,16 @@ class Device:
         B[0, 1], B[-1, 2] = g
         return c, diag, off, B, np.array([self.G, *g])
 
+    def stiffness(self):
+        """Positive spin-loss matrix, including local charge feedback if selected."""
+        c, diag, off, B, direct = self.matrices()
+        K = np.diag(diag) + np.diag(off, 1) + np.diag(off, -1)
+        if self.geometry == "local":
+            dx = self.length / self.cells
+            coefficient = self.a**2 * self.length / self.G
+            K += coefficient * (dx*np.eye(self.cells) - dx**2/self.length*np.ones((self.cells, self.cells)))
+        return c, K, B, direct
+
     def response(self, omega):
         if not np.isfinite(omega):
             raise ValueError("omega must be finite")
@@ -70,7 +83,11 @@ class Device:
         band[1] = diag - 1j * omega * c
         band[0, 1:] = off
         band[2, :-1] = off
-        states = solve_banded((1, 1), band, B)
+        if self.geometry == "local":
+            c, K, B, direct = self.stiffness()
+            states = solve(K - 1j*omega*c*np.eye(self.cells), B, assume_a="sym")
+        else:
+            states = solve_banded((1, 1), band, B)
         E = np.diag([1., -1., -1.])
         Y = np.diag(direct) + E @ B.T @ states
         return Y, states
@@ -78,13 +95,31 @@ class Device:
     def decay_rates(self, load=0.0, count=3):
         if np.isnan(load) or load < 0:
             raise ValueError("nonnegative load required")
-        c, diag, off, B, _ = self.matrices()
+        c, K, B, _ = self.stiffness()
         if not isinstance(count, (int, np.integer)) or not 1 <= count <= self.cells:
             raise ValueError("count must be an integer between 1 and cells")
-        K = np.diag(diag) + np.diag(off, 1) + np.diag(off, -1)
         r = 1 / self.G if np.isinf(load) else load / (1 + load * self.G)
         K += r * np.outer(B[:, 0], B[:, 0])
         return eigh(K / c, subset_by_index=[0, count - 1], eigvals_only=True)
+
+
+def asymmetric_pole(length, D, gamma, kappa_left, kappa_right):
+    """Lowest scalar Robin rate for finite nonnegative, possibly unequal contacts.
+
+    This does not include local electrical feedback. A phase formulation avoids
+    multiplying large Biot numbers and covers a single reflecting interface.
+    """
+    if not np.isfinite([length, D, gamma, kappa_left, kappa_right]).all():
+        raise ValueError("finite inputs required; use slowest_pole for two absorbing contacts")
+    if min(length, D, gamma) <= 0 or min(kappa_left, kappa_right) < 0:
+        raise ValueError("positive length, D, gamma and nonnegative contacts required")
+    if kappa_left == kappa_right:
+        return slowest_pole(length, D, gamma, kappa_left)
+    bl, br = kappa_left*length/D, kappa_right*length/D
+    # q = atan(bL/q) + atan(bR/q) is monotone across the fundamental branch.
+    q = brentq(lambda q: q - np.arctan2(bl, q) - np.arctan2(br, q),
+               0., np.pi, xtol=1e-14)
+    return gamma + D*(q/length)**2
 
 
 def slowest_pole(length, D, gamma, kappa):
@@ -200,34 +235,6 @@ def main():
         table.append(f"{label} & {row['truth']:.3f} & {row['fitted']:.3f} & {row['local_log_standard_error']:.3f} " + r"\\")
     table += [r"\bottomrule", r"\end{tabular}"]
     (ROOT / "tables/synthetic_inference.tex").write_text("\n".join(table) + "\n")
-    plt.rcParams.update({"font.size": 9, "axes.spines.top": False, "axes.spines.right": False})
-    fig, ax = plt.subplots(1, 2, figsize=(7., 2.8), constrained_layout=True)
-    dense = np.geomspace(.045, 35., 260)
-    ax[0].loglog(dense, [slowest_pole(L, *parameters) for L in dense], color="#007c78", label="joint fit")
-    ax[0].errorbar(lengths, observed, yerr=sigma*observed, fmt="o", markersize=3,
-                  color="#b83552", label="synthetic, 2% error")
-    ax[0].axhline(truth[1], color="#555555", linestyle=":", label="intrinsic rate")
-    ax[0].set(xlabel="Length (reference units)", ylabel="Slowest decay rate", title="(a) Thickness-series inference")
-    ax[0].legend(fontsize=7)
-    ax[1].semilogx(loads, load_rates/short, color="#007c78", label="spatial model")
-    ax[1].semilogx(loads*device.G, [node_rate(device, R)/node_rate(device, 0) for R in loads], color="#b83552", linestyle="--", label="uniform-node approximation")
-    ax[1].set(xlabel=r"Electrical load $RG$", ylabel=r"Rate / short-circuit rate", title="(b) Reciprocal electrical feedback")
-    ax[1].legend(fontsize=7)
-    fig.savefig(ROOT / "figures/fig_device_inference.pdf", metadata=METADATA)
-    plt.close(fig)
-    fig, ax = plt.subplots(1, 2, figsize=(7., 2.6), constrained_layout=True)
-    ax[0].loglog(omega, [r["common_inverse_abs"] for r in rows], color="#007c78", label="common spin drive")
-    ax[0].loglog(omega, [max(r["differential_inverse_abs"], 1e-17) for r in rows], color="#b83552", linestyle="--", label="differential (roundoff)")
-    ax[0].set(xlabel=r"Frequency $\omega/\Gamma$", ylabel="Inverse-response magnitude")
-    ax[0].legend(fontsize=7)
-    ax[1].semilogx(omega, [r["Y_cL_real"] for r in rows], color="#007c78", label=r"Re $Y_{cL}$")
-    ax[1].semilogx(omega, [-r["Y_Lc_real"] for r in rows], color="#b83552", linestyle="--", label=r"Re $(-Y_{Lc})$")
-    ax[1].semilogx(omega, [r["Y_cL_imag"] for r in rows], color="#375b9a", label=r"Im $Y_{cL}$")
-    ax[1].semilogx(omega, [-r["Y_Lc_imag"] for r in rows], color="#b18b22", linestyle="--", label=r"Im $(-Y_{Lc})$")
-    ax[1].set(xlabel=r"Frequency $\omega/\Gamma$", ylabel="Cross-admittance")
-    ax[1].legend(fontsize=7)
-    fig.savefig(ROOT / "figures/fig_reciprocal_ports.pdf", metadata=METADATA)
-    plt.close(fig)
     print(json.dumps(summary, indent=2))
 
 

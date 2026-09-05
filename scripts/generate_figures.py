@@ -82,71 +82,35 @@ def sci_tex(value):
 
 
 def generate_model_schematic():
-    fig, ax = plt.subplots(figsize=(7.0, 2.05))
+    fig, ax = plt.subplots(figsize=(7.0, 2.7), constrained_layout=True)
     ax.set_axis_off()
     boxes = [
-        (0.02, 0.37, 0.18, 0.31, "charge current\nthrough chiral axis"),
-        (0.26, 0.37, 0.19, 0.31, "current-induced\nelectronic response"),
-        (0.50, 0.37, 0.20, 0.31, "SOC-enabled\nspin cross-response"),
-        (0.75, 0.34, 0.22, 0.37, "reservoir exchange,\nrelaxation, transport,\nand reciprocal ports"),
+        (.02, .37, .17, .28, "Left spin reservoir\n" + r"$h_L,\ I_L$"),
+        (.31, .35, .38, .32, "Chiral layer: physical spin\n" + r"$s_\parallel(z)=C_v h(z)$" + "\n" + r"$D_s,\ \Gamma,\ \beta$"),
+        (.81, .37, .17, .28, "Right spin reservoir\n" + r"$h_R,\ I_R$"),
+        (.37, .02, .26, .16, "Bath: angular-momentum sink"),
+        (.30, .83, .40, .15, "Charge port: voltage drive or passive load R"),
     ]
-    for x0, y0, width, height, text in boxes:
-        patch = FancyBboxPatch(
-            (x0, y0),
-            width,
-            height,
-            boxstyle="round,pad=0.012",
-            linewidth=1.0,
-            facecolor="white",
-            edgecolor="black",
-        )
-        ax.add_patch(patch)
-        ax.text(x0 + width / 2, y0 + height / 2, text, ha="center", va="center")
-
-    for left, right in zip(boxes[:-1], boxes[1:]):
-        x1 = left[0] + left[2]
-        y1 = left[1] + left[3] / 2
-        x2 = right[0]
-        y2 = right[1] + right[3] / 2
-        ax.add_patch(
-            FancyArrowPatch(
-                (x1 + 0.012, y1),
-                (x2 - 0.012, y2),
-                arrowstyle="->",
-                mutation_scale=12,
-                linewidth=1.0,
-            )
-        )
-
-    ax.text(
-        0.11,
-        0.15,
-        r"$\mathbf{j}_c=j_c\hat{\mathbf{h}}$",
-        ha="center",
-    )
-    ax.text(
-        0.355,
-        0.15,
-        r"$\delta\mathcal{J}^{\rm ang}_h=C_{{\rm ang},j}j_c$",
-        ha="center",
-        fontsize=7,
-    )
-    ax.text(
-        0.595,
-        0.15,
-        r"$s_{\chi,h}=\mathcal{A}_{hh}\Omega_{\chi,h}$",
-        ha="center",
-    )
-    ax.text(
-        0.86,
-        0.15,
-        r"$1+D_sq^2T_1+iqv_dT_1-i\omega T_1$",
-        ha="center",
-        fontsize=6.5,
-    )
-    ax.set_xlim(0, 1)
-    ax.set_ylim(0, 1)
-    save_pdf(fig, "fig_model_schematic.pdf", tight=True)
+    for x, y, w, h, label in boxes:
+        ax.add_patch(FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.006",
+                                   linewidth=.9, facecolor="white", edgecolor="#333333"))
+        ax.text(x+w/2, y+h/2, label, ha="center", va="center", fontsize=8)
+    arrows = [
+        ((.19, .51), (.31, .51), "<->"),
+        ((.69, .51), (.81, .51), "<->"),
+        ((.50, .35), (.50, .18), "->"),
+        ((.38, .83), (.38, .67), "<->"),
+        ((.62, .83), (.62, .67), "<->"),
+    ]
+    for start, end, style in arrows:
+        ax.add_patch(FancyArrowPatch(start, end, arrowstyle=style,
+                                    mutation_scale=11, linewidth=1., color="#007c78"))
+    ax.text(.25, .60, r"$\kappa_L$", ha="center")
+    ax.text(.75, .60, r"$\kappa_R$", ha="center")
+    ax.text(.51, .265, r"$\Gamma C_vh$", va="center", ha="left")
+    ax.text(.50, .75, r"$V,\ j_c$", ha="center", va="center")
+    ax.set(xlim=(0, 1), ylim=(0, 1))
+    save_pdf(fig, "fig_model_schematic.pdf")
 
 
 def generate_barnett_outputs():

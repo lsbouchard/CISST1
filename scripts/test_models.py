@@ -7,7 +7,7 @@ import numpy as np
 from scipy.integrate import solve_bvp
 
 from solve_contact_transparency import solve_profile, contact_observables, residuals
-from reciprocal_device import Device, slowest_pole, infer_parameters
+from reciprocal_device import Device, slowest_pole, asymmetric_pole, infer_parameters
 import validate_outputs as validator
 
 
@@ -69,9 +69,9 @@ class ContactTests(unittest.TestCase):
 class ReciprocalTests(unittest.TestCase):
     def test_reciprocity_passivity_and_power(self):
         E = np.diag([1., -1., -1.])
-        for d in [Device(cells=60), Device(kappa_left=.1, kappa_right=2., a=-.8, cells=60)]:
-            c, diag, off, B, direct = d.matrices()
-            K = np.diag(diag) + np.diag(off, 1) + np.diag(off, -1)
+        for d in [Device(cells=60), Device(kappa_left=.1, kappa_right=2., a=-.8, cells=60),
+                  Device(kappa_left=.1, kappa_right=2., a=-.8, cells=60, geometry="local")]:
+            c, K, B, direct = d.stiffness()
             for w in [0., .1, 1., 10., 1000.]:
                 Y, states = d.response(w)
                 np.testing.assert_allclose(Y, E @ Y.T @ E, atol=1e-11)
@@ -124,6 +124,82 @@ class ReciprocalTests(unittest.TestCase):
         self.assertAlmostEqual(slowest_pole(1., 1., 1., 1e-15), 1., delta=3e-15)
         with self.assertRaises(ValueError):
             Device(cells=10).decay_rates(count=11)
+
+    def test_asymmetric_spectrum(self):
+        for L in [.05, 1., 30.]:
+            for kl, kr in [(1., .1), (.1, 1.), (0., 1.), (1., 1.)]:
+                exact = asymmetric_pole(L, 1., .2, kl, kr)
+                swapped = asymmetric_pole(L, 1., .2, kr, kl)
+                self.assertAlmostEqual(exact, swapped)
+                if kl == kr:
+                    self.assertAlmostEqual(exact, slowest_pole(L, 1., .2, kl))
+                errors = [abs(Device(length=L, D=1., gamma=.2, kappa_left=kl,
+                                     kappa_right=kr, cells=n).decay_rates()[0]-exact)
+                          for n in [60, 480]]
+                self.assertLess(errors[-1]/exact, 3e-6)
+                self.assertLess(errors[-1], errors[0]/10)
+
+    def test_load_determinant_and_local_feedback(self):
+        for geometry in ["lumped", "local"]:
+            d = Device(cells=40, geometry=geometry, a=2., D=.1)
+            c, K, B, direct = d.stiffness()
+            baseline = d.decay_rates(count=40)
+            Y0, _ = d.response(0.)
+            for R in [.1, 1., 10., np.inf]:
+                rates = d.decay_rates(R, count=40)
+                self.assertTrue((rates >= baseline-1e-10).all())
+                prediction = Y0[0, 0].real/d.G if np.isinf(R) else (1+R*Y0[0, 0].real)/(1+R*d.G)
+                self.assertAlmostEqual(np.exp(np.log(rates/baseline).sum()), prediction, delta=1e-9)
+            if geometry == "local":
+                _, K0, _, _ = Device(cells=40, a=2., D=.1).stiffness()
+                correction = K-K0
+                np.testing.assert_allclose(correction@np.ones(40), 0., atol=1e-12)
+                self.assertGreaterEqual(np.linalg.eigvalsh(correction).min(), -1e-12)
+
+    def test_model_misspecification_and_capacity(self):
+        from robustness import contact_fits, elimination_data
+        _, fits = contact_fits()
+        self.assertLess(fits[0]['D'], .4)
+        self.assertLess(fits[0]['rms_log_mismatch'], .01)
+        result = elimination_data()
+        self.assertGreater(result['schur_rate']/result['exact_rates'][0], 100)
+        self.assertLess(abs(result['corrected_rate']/result['exact_rates'][0]-1), 1e-4)
+
+    def test_invalid_geometry_and_asymmetric_inputs(self):
+        with self.assertRaises(ValueError):
+            Device(geometry="unknown").response(0.)
+        for contacts in [(np.nan, 1.), (-1., 1.), (np.inf, 1.)]:
+            with self.assertRaises(ValueError):
+                asymmetric_pole(1., 1., 1., *contacts)
+
+    def test_weighted_kinetic_projection(self):
+        weights = np.array([2., 2., 3., 3.])
+        spin = np.array([1., -1., .5, -.5])
+        velocity = np.array([3., -3., -1., 1.])
+        W = np.diag(weights)
+        capacity = spin@W@spin
+        P = np.outer(spin, weights*spin)/capacity
+        np.testing.assert_allclose(P@P, P, atol=1e-14)
+        np.testing.assert_allclose(W@P, P.T@W, atol=1e-14)
+        np.testing.assert_allclose(P@np.ones(4), 0., atol=1e-14)
+        charge = -1.
+        beta = charge*spin@W@velocity
+        h, field = .3, .2
+        current = charge*velocity@W@(spin*h)
+        source = spin@W@(charge*velocity*field)
+        self.assertAlmostEqual(current, beta*h)
+        self.assertAlmostEqual(source, beta*field)
+        self.assertAlmostEqual(current*field-h*source, 0.)
+
+    def test_frequency_elimination_remainder(self):
+        from robustness import elimination_data
+        r = elimination_data()
+        G = np.array(r['generator_per_second'])
+        for omega in [.001, .01, .1]:
+            exact = G[0, 0]-1j*omega-G[0, 1]*G[1, 0]/(G[1, 1]-1j*omega)
+            reduced = r['schur_rate']-1j*omega*r['capacity']
+            bound = omega**2*abs(G[0, 1]*G[1, 0])/G[1, 1]**3/(1-omega/G[1, 1])
+            self.assertLessEqual(abs(exact-reduced), bound+2e-11)
 
 
 if __name__ == "__main__":

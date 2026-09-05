@@ -1,5 +1,32 @@
 # Change log
 
+## Controlled reduction and inference robustness - 2026-09-05
+
+- Moved the contact-resolved device and electrical-load results to the front;
+  moved the Barnett diagnostic, operator background, and elementary transport
+  solutions to appendices while preserving the explicit Appendix C identities.
+- Replaced the uncontrolled dynamic Schur identification by an exact resolvent,
+  an effective capacity matrix, and a norm bound on the memory remainder.
+- Added a rank-one kinetic projector, physical-spin susceptibility, reciprocal
+  conversion overlap, and a bare-conductivity matching example that excludes
+  the retained spin pole.
+- Distinguished lumped voltage coupling from a local series conductor; derived
+  and implemented the positive loss of nonuniform spin profiles required by
+  local charge conservation.
+- Added the finite-mode load determinant identity and its calibrated single-node
+  electrical-admittance/decay-rate consequence, with explicit limitations.
+- Added unequal-contact pole calculations, misleading equal-contact fits,
+  restricted-length conditioning, and asymmetric common/differential response.
+  Replaced the main same-model recovery plot and roundoff-only reciprocity plot.
+- Added geometry-dependent rates plotted in common units; retained synthetic
+  recovery data and all existing source generators for reproducibility.
+- Expanded comparison with prior chiral Edelstein transport and reciprocal
+  spin-pumping feedback; added verified Cheng and Rogdakis references.
+- Specified same-device, spin-sensitive, contact-calibrated load tests; separated
+  microwave carrier frequency from longitudinal envelope response.
+- Fixed residual volume/operator notation. Preserved REVTeX4-2 two columns,
+  UCLA affiliation, GitHub-only data statement, and separate minimal/code ZIPs.
+
 ## Contact-resolved response release - 2026-09-04
 
 - Retitled the paper `Relaxation and Reciprocity in Chiral Spin Transport`.
