@@ -27,9 +27,13 @@ python3 -m venv .venv
 .venv/bin/python scripts/quantum_helix.py
 .venv/bin/python scripts/validate_outputs.py
 .venv/bin/python scripts/test_models.py
+.venv/bin/python scripts/test_junction_transport.py
+.venv/bin/python scripts/validate_junction.py
 ```
 
-The generators recreate fourteen figure PDFs, all CSV/JSON data, and three tables.
+The original generators recreate fourteen figure PDFs, their CSV/JSON data,
+and three tables. The separate junction generator below recreates its own data
+and two additional figures.
 Do not edit generated numbers. Change model inputs in the scripts and rerun.
 PDF timestamps are stripped. Repeatability is tested on the same pinned runtime;
 other BLAS libraries can change last digits, so validation uses tolerances.
@@ -226,6 +230,42 @@ The thickness data are **synthetic**, with seed 20260904 and 2% Gaussian noise
 in log rate. No experimental amplitude or fitted experimental relaxation time
 is claimed. Fit uncertainties are conditional on the model and known noise.
 
+## Finite Junction Benchmark
+
+The separate finite-junction calculation is documented in
+[JUNCTION_BENCHMARK.md](JUNCTION_BENCHMARK.md). It does not alter the manuscript's
+figures or silently identify steady-state transport with a scalar T1.
+
+```bash
+make junction
+make junction-validate
+make junction-figures
+```
+
+`junction_transport.py` retains all spatial and physical-spin matrix elements
+in a self-consistent Fock+Hartree electron-phonon calculation. The static helix
+has spin-independent Fermi leads and a thermal Rashba-amplitude bath. No spin
+target or additional Barnett Zeeman term is inserted. The solver exposes charge,
+energy, and spin-torque balance, spin accumulation, gross spin extraction, and
+net drain spin per particle as distinct observables. Matrices have dimension
+`2*sites`; energy is in t, time in hbar/t, and particle flux in t/hbar.
+
+`benchmark_junction.py` regenerates five CSVs and parameter metadata under
+`data/junction/`, and two figure PDFs under `figures/junction/`. Every plotted
+parameter point is resolution-checked. The full scan is slower than the unit
+tests. To resume an interrupted scan, use
+`python scripts/benchmark_junction.py --resume`; checkpoints are accepted only
+for identical solver sources, runtime, controls, and inputs. The default
+`make junction` recalculates from scratch. Checkpoints are not distributed.
+`make junction-figures` first validates the stored data, including a fresh
+transport case, then redraws both figures without repeating the full scan.
+Parameter metadata records the producing source hashes and numerical runtime.
+
+Independent tests include elastic scalar-gauge reduction, Landauer current,
+thermal detailed balance, frame invariance, full multichannel scattering
+unitarity, and a dilute-beam comparison of SCBA and exact phonon scattering.
+Both this benchmark and its parameter map are synthetic, not a material fit.
+
 ## Verification
 
 `validate_outputs.py` recalculates every series and all three tables and rejects
@@ -239,7 +279,8 @@ contact-model misspecification. Spectral tests include reconstruction,
 residue factorization, load-slope/interlacing checks, 80 randomized tail-bound
 cases, SI rescaling, dark/degenerate modes, nonuniform local power balance, and
 multimode kinetic projection with a controlled fast conductivity background.
-The full suite now has 37 tests. Mechanism tests check the exact spin-frame
+The existing model suite has 37 tests; the junction suite adds 13 independent
+tests. Mechanism tests check the exact spin-frame
 transformation, thermal KMS balance and stationary Gibbs state, direct master
 equation integration and positivity, laboratory/rotating open-system covariance,
 zero SOC and reversal symmetries, lab-fixed sideband cancellation, residence-time
@@ -250,8 +291,10 @@ time-reversal symmetry and zero equilibrium spin, exact Fourier-block matching,
 the fluctuation vertex, matrix-exponential spin dynamics, common-momentum
 preparation, and the finite-turn constraint. Signed Rashba coefficients and
 overflow-safe large finite electrical loads have regression coverage.
-The GitHub Actions workflow runs the complete regeneration and checks on Python
-3.12 and 3.14. Its result is separate from the author-side PDF build.
+The GitHub Actions workflow regenerates the original figures, runs all 50
+tests, validates every stored junction sample, and recomputes one junction case
+on Python 3.12 and 3.14. The full junction scan is a separate, slower command.
+CI verification is separate from the author-side PDF build.
 
 The author workspace additionally has the BibTeX manuscript and a `make pdf`
 target. The minimal Overleaf archive needs pdfLaTeX and REVTeX4-2, not Python or

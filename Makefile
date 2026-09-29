@@ -1,6 +1,6 @@
 PYTHON ?= python3
 
-.PHONY: all figures validate test
+.PHONY: all figures validate test junction junction-validate junction-figures
 all: validate
 
 figures:
@@ -15,6 +15,20 @@ figures:
 validate: figures
 	$(PYTHON) scripts/validate_outputs.py
 	$(PYTHON) scripts/test_models.py
+	$(PYTHON) scripts/test_junction_transport.py
+	$(PYTHON) scripts/validate_junction.py
 
 test:
 	$(PYTHON) scripts/test_models.py
+	$(PYTHON) scripts/test_junction_transport.py
+
+junction:
+	$(PYTHON) scripts/benchmark_junction.py
+	$(PYTHON) scripts/validate_junction.py
+
+junction-validate:
+	$(PYTHON) scripts/test_junction_transport.py
+	$(PYTHON) scripts/validate_junction.py
+
+junction-figures:
+	$(PYTHON) scripts/benchmark_junction.py --plots-only

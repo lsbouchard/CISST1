@@ -1,5 +1,32 @@
 # Change log
 
+## Finite-junction transport benchmark - 2026-09-29
+
+- Added a finite static helical wire with spin-degenerate reservoirs and a
+  thermal Rashba-amplitude bath. Calculated outgoing spin flux with full spatial
+  and spin-matrix Fock+Hartree SCBA, without an imposed alignment target.
+- Retained finite-band contact embeddings, Pauli occupations, orbital recoil,
+  the causal retarded self-energy, and charge, heat, and spin-torque balances.
+- Added independent elastic SU(2)-gauge reduction, dilute multichannel phonon
+  scattering, thermal balance, enantiomer/flow/frame controls, and energy-unit
+  rescaling. Added a shuffled-input figure-label regression; expanded coverage
+  from 37 to 50 tests.
+- Generated five CSVs with 54 samples, parameter/source/runtime metadata, and
+  two separately documented figures. Every selected map and variation point
+  has explicit joint energy/bath-grid resolution checks; the reference also
+  has separate bath-cutoff and energy-window checks.
+- The synthetic reference net drain ratio is 0.0177309%; the largest tested
+  ratio is 0.0937223%. These are conditional model results, not experimental
+  fits, material predictions, or evidence for a large molecular CISS signal.
+- Distinguished accumulation, gross extraction, and net spin/particle ratios;
+  left the zero-current ratio undefined. Did not relabel a linewidth or elastic
+  residence time as a unique physical-spin T1.
+- Added validated plot-only regeneration, source-matched checkpoint resumption,
+  a technical benchmark report, and CI validation of every stored sample plus
+  a freshly computed transport case. Checkpoints are not distributed.
+- Kept the manuscript, its PDF, and the minimal TeX-plus-figures Overleaf ZIP
+  unchanged while this separate transport benchmark is scientifically assessed.
+
 ## Full scientific and numerical audit - 2026-09-29
 
 - Added a static, symmetrized orbital-spin Rashba Hamiltonian, exact screw
