@@ -7,7 +7,7 @@ import json
 import numpy as np
 from scipy.linalg import eigh
 from reciprocal_device import (ROOT, METADATA, Device, asymmetric_pole,
-                               slowest_pole, infer_parameters, node_rate, write_csv)
+                               slowest_pole, infer_parameters, node_rate, write_csv, load_feedback)
 import matplotlib.pyplot as plt
 
 
@@ -68,10 +68,10 @@ def load_data(cells=120):
         Ke, be = even.T@K@even, even.T@B[:, 0]
         for R in np.logspace(-3, 3, 70):
             rates = d.decay_rates(R, count=cells)
-            loaded_even = Ke+R/(1+R*d.G)*np.outer(be, be)
+            loaded_even = Ke+load_feedback(R, d.G)*np.outer(be, be)
             even_rate = eigh(loaded_even/c, subset_by_index=[0, 0], eigvals_only=True)[0]
             product = np.exp(np.sum(np.log(rates/baseline)))
-            electrical = (1+R*Y[0, 0].real)/(1+R*d.G)
+            electrical = 1+load_feedback(R, d.G)*(Y[0, 0].real-d.G)
             rows.append(dict(geometry=geometry, RG=R*d.G, lowest_rate=rates[0],
                              lowest_even_rate=even_rate,
                              node_rate=node_rate(d, R), pole_product=product,

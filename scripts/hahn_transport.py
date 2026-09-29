@@ -37,7 +37,7 @@ def flight_response(gamma, transit, frequency):
 class Helix:
     """Selected trajectory: Omega=chi*flow*omega, a=flow*zeta*omega.
 
-    omega>0 [1/s], zeta>=0 dimensionless mean SOC, pitch_ratio=radius/b>0,
+    omega>0 [1/s], zeta is a signed dimensionless mean SOC, pitch_ratio=radius/b>0,
     g>=0 [1/s] fluctuating SOC amplitude. chi/flow are +/-1.
     Setting all SOC to zero requires both zeta=0 and g=0.
     """
@@ -54,8 +54,8 @@ class Helix:
         values = [self.omega, self.zeta, self.pitch_ratio, self.g, self.omega_c, self.theta]
         if not np.isfinite(values).all() or min(self.omega, self.pitch_ratio, self.omega_c, self.theta) <= 0:
             raise ValueError("positive finite frequency, pitch ratio, cutoff and temperature required")
-        if min(self.zeta, self.g) < 0 or self.chi not in (-1, 1) or self.flow not in (-1, 1):
-            raise ValueError("nonnegative SOC amplitudes and signed chirality/flow required")
+        if self.g < 0 or self.chi not in (-1, 1) or self.flow not in (-1, 1):
+            raise ValueError("nonnegative fluctuation amplitude and signed chirality/flow required")
 
     @property
     def rotation(self):

@@ -1,5 +1,30 @@
 # Change log
 
+## Full scientific and numerical audit - 2026-09-29
+
+- Added a static, symmetrized orbital-spin Rashba Hamiltonian, exact screw
+  conservation, and fixed-Q fibers including kinetic recoil. The Barnett term
+  now has explicit orbital energy and momentum bookkeeping.
+- Distinguished unpolarized spin at one Q from an unpolarized beam with one
+  physical orbital momentum; added the two-sector Bloch solution and tests.
+- Quantified the active-turn requirement: the reference example needs 326
+  turns per alignment time and 751 for 90% of the target; ten turns give 2.91%
+  polarization. Large stationary targets are not short-molecule predictions.
+- Added the orbital-action diagnostic: the illustrative free-electron-mass
+  DNA-like estimate gives 0.0668 hbar at 1e13 assumed steps/s and does not
+  justify prescribed semiclassical motion. No effective mass was fitted.
+- Added a two-panel applicability figure, three CSVs, a parameter JSON file,
+  and quantum_helix.py. Expanded independent regression coverage to 37 tests.
+- Fixed rejection of signed Rashba coefficients and overflow for large finite
+  resistive loads; retained correct small-load behavior and added regressions.
+- Added the closest geometric-SOC references, clarified the novelty relative
+  to frame-only and orbital-Edelstein descriptions, and updated Shmayev et al.
+  to its published journal record.
+- Qualified Hanle-inferred relaxation as protocol-dependent, distinguished
+  contact storage from active helical residence, and corrected a lambda typo.
+- Preserved REVTeX two-column formatting, UCLA affiliation, GitHub-only data
+  availability, explicit operator arguments, and separate minimal/code ZIPs.
+
 ## Hahn-inspired CISS mechanism restored - 2026-09-05
 
 - Rebuilt the main text around helical Rashba coupling, the Barnett spin-frame

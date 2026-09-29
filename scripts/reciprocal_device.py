@@ -20,6 +20,13 @@ METADATA = {"CreationDate": None, "ModDate": None,
             "Title": "Contact-resolved reciprocal chiral spin transport"}
 
 
+def load_feedback(load, conductance):
+    """R/(1+RG) [ohm m^2], without overflowing a large finite R*G."""
+    if np.isnan(load) or load < 0 or not np.isfinite(conductance) or conductance <= 0:
+        raise ValueError("nonnegative load and positive finite conductance required")
+    return load/(1.+load*conductance) if load <= 1. else 1./(conductance+1./load)
+
+
 @dataclass
 class Device:
     """Finite-volume weak form C dh/dt = -K h + B (V,hL,hR).
@@ -98,7 +105,7 @@ class Device:
         c, K, B, _ = self.stiffness()
         if not isinstance(count, (int, np.integer)) or not 1 <= count <= self.cells:
             raise ValueError("count must be an integer between 1 and cells")
-        r = 1 / self.G if np.isinf(load) else load / (1 + load * self.G)
+        r = load_feedback(load, self.G)
         K += r * np.outer(B[:, 0], B[:, 0])
         return eigh(K / c, subset_by_index=[0, count - 1], eigvals_only=True)
 
@@ -173,7 +180,7 @@ def node_rate(device, load):
     capacity = device.susceptibility * device.length
     escape = device.susceptibility * (device.kappa_left + device.kappa_right)
     vertex = device.a * device.length
-    feedback = 1 / device.G if np.isinf(load) else load / (1 + load * device.G)
+    feedback = load_feedback(load, device.G)
     return device.gamma + escape / capacity + vertex**2 * feedback / capacity
 
 

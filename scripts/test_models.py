@@ -67,6 +67,18 @@ class ContactTests(unittest.TestCase):
 
 
 class ReciprocalTests(unittest.TestCase):
+    def test_large_finite_load_and_invalid_loads(self):
+        from reciprocal_device import load_feedback, node_rate
+        self.assertAlmostEqual(load_feedback(1e300, 1e10), 1e-10)
+        self.assertEqual(load_feedback(0., 1.), 0.)
+        self.assertEqual(load_feedback(1e-320, 10.), 1e-320)
+        d = Device(G=10., cells=20)
+        np.testing.assert_allclose(d.decay_rates(1e308), d.decay_rates(np.inf), atol=1e-12)
+        self.assertEqual(node_rate(d, 1e308), node_rate(d, np.inf))
+        for load in [-1., np.nan]:
+            with self.assertRaises(ValueError):
+                load_feedback(load, 1.)
+
     def test_reciprocity_passivity_and_power(self):
         E = np.diag([1., -1., -1.])
         for d in [Device(cells=60), Device(kappa_left=.1, kappa_right=2., a=-.8, cells=60),
@@ -313,6 +325,14 @@ class SpectralTests(unittest.TestCase):
 
 
 class HahnMechanismTests(unittest.TestCase):
+    def test_signed_rashba_and_symmetry(self):
+        from hahn_transport import Helix
+        for zeta in [-.3, 0., .3, 2.]:
+            base = Helix(zeta=zeta)
+            for change in [dict(chi=-1), dict(flow=-1)]:
+                np.testing.assert_allclose(Helix(zeta=zeta, **change).polarization([1., 1000.]),
+                                           -base.polarization([1., 1000.]), atol=1e-13)
+
     def test_rotating_hamiltonian_and_coupling(self):
         from hahn_transport import Helix, SY, SZ
         model = Helix()
@@ -456,6 +476,88 @@ class HahnMechanismTests(unittest.TestCase):
         for row in rows:
             self.assertLess(row["Gamma1_over_omega_c"], .01*row["omega_over_cutoff"])
             self.assertLess(abs(row["Pz_ten_turns"]), 1.)
+
+
+class QuantumHelixTests(unittest.TestCase):
+    def test_operator_hermiticity_screw_conservation_and_time_reversal(self):
+        from quantum_helix import fourier_operators
+        from hahn_transport import SY
+        from scipy.linalg import expm
+        cutoff = 5
+        T = np.kron(np.eye(2*cutoff+1)[::-1], 1j*SY)
+        for zeta in [-.3, 0., .3]:
+            for chi in [-1, 1]:
+                H, Q, spin = fourier_operators(cutoff, .7, zeta, .8, chi)
+                np.testing.assert_allclose(H, H.conj().T, atol=1e-14)
+                np.testing.assert_allclose(H@Q-Q@H, 0., atol=1e-14)
+                np.testing.assert_allclose(T@H.conj()@T.conj().T, H, atol=1e-14)
+                np.testing.assert_allclose(T@Q.conj()@T.conj().T, -Q, atol=1e-14)
+                rho = expm(-H/.6); rho /= np.trace(rho)
+                self.assertAlmostEqual(np.trace(rho@spin).real, 0., delta=1e-13)
+
+    def test_exact_sector_reduction_and_fluctuation_vertex(self):
+        from quantum_helix import fourier_operators, sector_hamiltonian
+        cutoff, rate, r = 5, .7, .8
+        for zeta in [-.3, .3]:
+            for chi in [-1, 1]:
+                H, Q, _ = fourier_operators(cutoff, rate, zeta, r, chi)
+                for ell in range(-cutoff, cutoff):
+                    k = ell+.5
+                    indices = [2*(ell+cutoff), 2*(ell+1+cutoff)+1]
+                    block = H[np.ix_(indices, indices)]
+                    np.testing.assert_allclose(block, sector_hamiltonian(k, rate, zeta, r, chi), atol=1e-14)
+                    np.testing.assert_allclose(np.diag(Q)[indices], k)
+                # Modulation of the SOC coefficient preserves the same Q sectors.
+                H1, _, _ = fourier_operators(cutoff, rate, zeta+.01, r, chi)
+                np.testing.assert_allclose((H1-H)@Q-Q@(H1-H), 0., atol=1e-14)
+
+    def test_sector_bloch_formula_against_matrix_generator(self):
+        from quantum_helix import sector_polarization
+        from hahn_transport import Helix, SZ, dissipator
+        from scipy.linalg import expm
+        model = Helix(zeta=-.2)
+        H, jumps = model.hamiltonian, model.jumps()
+        basis = np.eye(4, dtype=complex).reshape(4, 2, 2)
+        generator = np.column_stack([(-1j*(H@b-b@H)+dissipator(b, jumps)).ravel() for b in basis])
+        for spin in [-1, 1]:
+            initial = (np.eye(2)+spin*SZ)/2
+            for t in [0., 3., 100., 1000.]:
+                rho = (expm(generator*t)@initial.ravel()).reshape(2, 2)
+                self.assertAlmostEqual(np.trace(rho@SZ).real,
+                                       float(sector_polarization(model, t, spin)), delta=2e-12)
+
+    def test_common_physical_momentum_and_semiclassical_limit(self):
+        from quantum_helix import common_momentum_polarization
+        from hahn_transport import Helix
+        times = np.array([0., 1., 100., 1000.])
+        for ell in [.067, 1., 2., 10.]:
+            np.testing.assert_allclose(common_momentum_polarization(ell, times, Helix(zeta=0., g=0.)), 0., atol=1e-14)
+            self.assertAlmostEqual(float(common_momentum_polarization(ell, 0.)), 0., delta=1e-14)
+            for change in [dict(chi=-1), dict(flow=-1)]:
+                np.testing.assert_allclose(common_momentum_polarization(ell, times, Helix(**change)),
+                                           -common_momentum_polarization(ell, times), atol=1e-13)
+        model = Helix()
+        errors = [np.max(abs(common_momentum_polarization(ell, times)-model.polarization(times)))
+                  for ell in [1e5, 1e6]]
+        self.assertLess(errors[-1], 5e-6)
+        self.assertAlmostEqual(errors[0]/errors[1], 10., delta=.02)
+
+    def test_finite_turn_bound_and_physical_scale(self):
+        from quantum_helix import alignment_turns, example_data
+        from hahn_transport import Helix
+        model = Helix()
+        down, up, _ = model.rates()
+        ratio = (down+up)/model.omega
+        for fraction in [.1, .5, .9]:
+            turns = alignment_turns(fraction, ratio)
+            self.assertAlmostEqual(float(model.polarization(2*np.pi*turns/model.omega))/model.target(), fraction)
+        _, _, _, summary = example_data()
+        self.assertTrue(325 < summary['reference_turns_per_T1'] < 327)
+        self.assertTrue(.066 < summary['orbital_action_at_step_rate_1e13'] < .068)
+        self.assertTrue(.029 < summary['reference_ten_turn_Pz'] < .030)
+        for args in [(0., 1.), (1., 1.), (.5, 0.), (.5, np.nan)]:
+            with self.assertRaises(ValueError):
+                alignment_turns(*args)
 
 
 if __name__ == "__main__":

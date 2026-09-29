@@ -429,6 +429,7 @@ def validate_figure_files():
         "fig_hahn_alignment.pdf",
         "fig_hahn_transit.pdf",
         "fig_hahn_baths.pdf",
+        "fig_alignment_validity.pdf",
     }
     actual = {path.name for path in FIGURES.glob("*.pdf")}
     if actual != expected:
@@ -450,8 +451,34 @@ def main():
     validate_robustness()
     validate_spectral_outputs()
     validate_hahn_outputs()
+    validate_quantum_outputs()
     validate_figure_files()
     print("Validated constants, table, figures, and all generated numerical data.")
+
+
+def validate_quantum_outputs():
+    from quantum_helix import example_data
+    turns, scales, quantum, summary = example_data()
+    for filename, expected in [("alignment_turns.csv", turns), ("orbital_recoil_scales.csv", scales),
+                               ("quantum_helix_matching.csv", quantum)]:
+        actual = read_rows(filename)
+        if len(actual) != len(expected):
+            raise AssertionError(f"incorrect quantum sample count: {filename}")
+        for i, (row, reference) in enumerate(zip(actual, expected)):
+            if row.keys() != reference.keys():
+                raise AssertionError(f"incorrect quantum columns: {filename}")
+            for key, value in reference.items():
+                tolerance = 0. if key.endswith("_J") else 1e-12
+                assert_close(float(row[key]), value, f"{filename}[{i}].{key}", rtol=1e-9, atol=tolerance)
+    actual = json.loads((DATA/"quantum_helix_parameters.json").read_text())
+    if actual.keys() != summary.keys():
+        raise AssertionError("incorrect quantum completion metadata keys")
+    for key, value in summary.items():
+        if isinstance(value, (str, dict)):
+            if actual[key] != value:
+                raise AssertionError(f"incorrect quantum metadata: {key}")
+        else:
+            assert_close(actual[key], value, key, rtol=1e-9, atol=0.)
 
 
 if __name__ == "__main__":

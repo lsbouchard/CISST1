@@ -10,6 +10,7 @@ figures:
 	$(PYTHON) scripts/robustness.py
 	$(PYTHON) scripts/spectral_tests.py
 	$(PYTHON) scripts/hahn_transport.py
+	$(PYTHON) scripts/quantum_helix.py
 
 validate: figures
 	$(PYTHON) scripts/validate_outputs.py

@@ -1,12 +1,12 @@
 # CISST1
 
 Reproducible calculations for **A Barnett Mechanism for Chiral Spin Transport**,
-by Mohamad Niknam and Louis-S. Bouchard (September 5, 2026).
+by Mohamad Niknam and Louis-S. Bouchard (September 29, 2026).
 
 Repository: https://github.com/lsbouchard/CISST1
 
 The minimal Overleaf ZIP is separate: it contains only self-contained `main.tex`
-and the twelve figure PDFs actually used by the paper. Bibliography and tables
+and the thirteen figure PDFs actually used by the paper. Bibliography and tables
 are embedded in the TeX file. The codebase contains no manuscript PDF or
 third-party publications. An optional diffusion landscape remains reproducible
 but is not a manuscript figure.
@@ -24,11 +24,12 @@ python3 -m venv .venv
 .venv/bin/python scripts/robustness.py
 .venv/bin/python scripts/spectral_tests.py
 .venv/bin/python scripts/hahn_transport.py
+.venv/bin/python scripts/quantum_helix.py
 .venv/bin/python scripts/validate_outputs.py
 .venv/bin/python scripts/test_models.py
 ```
 
-The generators recreate thirteen figure PDFs, all CSV/JSON data, and three tables.
+The generators recreate fourteen figure PDFs, all CSV/JSON data, and three tables.
 Do not edit generated numbers. Change model inputs in the scripts and rerun.
 PDF timestamps are stripped. Repeatability is tested on the same pinned runtime;
 other BLAS libraries can change last digits, so validation uses tolerances.
@@ -44,7 +45,7 @@ Hahn, Tenn, and Augustine (2006) motivate the rotating-interaction/relaxation
 construction; the molecular coupling assumed here is not established by their
 nuclear-spin calculation.
 
-`Helix` accepts traversal frequency magnitude `omega`, mean SOC ratio `zeta`,
+`Helix` accepts traversal frequency magnitude `omega`, signed mean SOC ratio `zeta`,
 radius-to-pitch-parameter ratio `pitch_ratio`, fluctuating SOC rate `g`, bath
 cutoff `omega_c`, temperature ratio `theta=kB*T/(hbar*omega_c)`, and signed
 chirality/flow. Frequencies and `g` are in 1/s. The bath spectrum has units s.
@@ -143,6 +144,33 @@ electrical geometries, and the dynamic-capacity counterexample. It replaces
 roundoff-only plots with physical contact asymmetry. The same-model noisy
 recovery data remain available as a regression example, not a robustness claim.
 
+## Quantum Completion and Applicability
+
+`quantum_helix.py` constructs a static, symmetrized orbital-spin Rashba Hamiltonian
+and its conserved screw generator Q=p_phi+Sz. `fourier_operators` returns
+H/hbar [1/s], Q/hbar, and Sz/hbar on 2*(2*cutoff+1) Fourier-spin basis states.
+`sector_hamiltonian` returns the exact 2-by-2 fixed-Q bulk fiber, including
+orbital kinetic recoil. `sector_polarization` gives a pure +/-z preparation's
+spin dynamics, with longitudinal relaxation, dephasing, and coherent precession.
+`common_momentum_polarization` averages the two Q sectors of an unpolarized
+beam with the same physical incident orbital momentum. It is a fixed-time
+bulk spin calculation, not a finite-junction transmission solver.
+
+The trajectory approximation needs I_h*abs(Omega)/hbar >> 1, not merely a large
+equivalent field. The assumed free-electron-mass DNA-like geometry gives only
+0.0668 at 1e13 assumed steps/s. The effective mass, physical channels, and
+occupations must be established independently. Generated SI scale data use
+CODATA 2022 m_e=9.1093837139e-31 kg as an illustrative mass, not a molecular fit.
+
+`alignment_turns(fraction, rate_over_rotation)` computes the constant-flight
+active-turn requirement. The reference rate needs 326 turns per T1 and 751
+turns for 90% of its stationary target; ten turns give Pz=0.02914, not 0.96536.
+Contact storage counts only while the same active helical generator persists.
+The new figure and CSVs expose these two independent applicability conditions.
+Generic spatial phonons can scatter between Q sectors and require a different
+reservoir-resolved kinetic model. No inverse-CISS coefficient is inferred from
+this conditional forward polarization.
+
 ## Scientific Assumptions
 
 `spectral_tests.py` provides `spectrum(device)`, the modal port decomposition;
@@ -211,12 +239,17 @@ contact-model misspecification. Spectral tests include reconstruction,
 residue factorization, load-slope/interlacing checks, 80 randomized tail-bound
 cases, SI rescaling, dark/degenerate modes, nonuniform local power balance, and
 multimode kinetic projection with a controlled fast conductivity background.
-The full suite now has 30 tests. Eight mechanism tests check the exact spin-frame
+The full suite now has 37 tests. Mechanism tests check the exact spin-frame
 transformation, thermal KMS balance and stationary Gibbs state, direct master
 equation integration and positivity, laboratory/rotating open-system covariance,
 zero SOC and reversal symmetries, lab-fixed sideband cancellation, residence-time
 averaging, finite-flight frequency quadrature, screw-coordinate bookkeeping,
 physical-unit rescaling, invalid inputs, and weak rate/gap ratios.
+Additional independent quantum tests check Hermiticity, screw conservation,
+time-reversal symmetry and zero equilibrium spin, exact Fourier-block matching,
+the fluctuation vertex, matrix-exponential spin dynamics, common-momentum
+preparation, and the finite-turn constraint. Signed Rashba coefficients and
+overflow-safe large finite electrical loads have regression coverage.
 The GitHub Actions workflow runs the complete regeneration and checks on Python
 3.12 and 3.14. Its result is separate from the author-side PDF build.
 
